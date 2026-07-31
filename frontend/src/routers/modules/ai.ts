@@ -12,6 +12,16 @@ const aiRouter = {
     },
     children: [
         {
+            path: '/ai/console',
+            name: 'Console',
+            component: () => import('@/views/ai/console/index.vue'),
+            meta: {
+                icon: 'p-taolun',
+                title: 'aiTools.console.console',
+                permission: 'ai_agent_view',
+            },
+        },
+        {
             path: '/ai/agents/agent',
             name: 'Agents',
             component: () => import('@/views/ai/agents/agent/index.vue'),

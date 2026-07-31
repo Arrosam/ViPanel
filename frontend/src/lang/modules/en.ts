@@ -705,6 +705,10 @@ const message = {
         localIP: 'Local IP',
     },
     aiTools: {
+        console: {
+            console: 'Console',
+            empty: 'No sessions yet',
+        },
         agents: {
             agent: 'Agent',
             account: 'Model Account',

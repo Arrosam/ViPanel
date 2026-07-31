@@ -671,6 +671,10 @@ const message = {
         localIP: '本机 IP',
     },
     aiTools: {
+        console: {
+            console: '控制台',
+            empty: '还没有会话',
+        },
         agents: {
             agent: '智能体',
             account: '模型账号',

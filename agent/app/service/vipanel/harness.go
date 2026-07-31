@@ -94,3 +94,21 @@ type Discovered struct {
 type Discoverer interface {
 	Discover(known map[string]bool, limit int) []Discovered
 }
+
+// AuthState 是 harness 自己的登录状态（与面板登录无关）。
+type AuthState struct {
+	Supported  bool   `json:"supported"`
+	LoggedIn   bool   `json:"loggedIn"`
+	AuthMethod string `json:"authMethod,omitempty"`
+	Email      string `json:"email,omitempty"`
+	Plan       string `json:"plan,omitempty"`
+}
+
+// Authenticator 由「自己有一套登录体系」的 harness 实现。
+// 和 Discoverer 一样是可选接口：shell 没有登录这个概念，
+// 硬塞进主接口只会逼它写一个空方法。
+type Authenticator interface {
+	AuthStatus() AuthState
+	LoginSpec(mode string) PtySpec
+	Logout() error
+}

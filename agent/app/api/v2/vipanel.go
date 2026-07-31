@@ -307,3 +307,72 @@ func (b *BaseApi) OpenViHistory(c *gin.Context) {
 	}
 	helper.SuccessWithData(c, vipanel.ToItem(s))
 }
+
+// ---------------------------------------------------------------------------
+// harness 自己的登录
+// ---------------------------------------------------------------------------
+
+// @Tags ViPanel
+// @Summary agent 登录状态
+// @Router /ai/console/auth/status [get]
+func (b *BaseApi) GetViAuthStatus(c *gin.Context) {
+	helper.SuccessWithData(c, vipanel.AuthStatus(c.DefaultQuery("harness", vipanel.DefaultHarness)))
+}
+
+// @Tags ViPanel
+// @Summary agent 登出
+// @Router /ai/console/auth/logout [post]
+func (b *BaseApi) ViAuthLogout(c *gin.Context) {
+	if err := vipanel.AuthLogout(c.DefaultQuery("harness", vipanel.DefaultHarness)); err != nil {
+		helper.InternalServer(c, err)
+		return
+	}
+	helper.Success(c)
+}
+
+// @Tags ViPanel
+// @Summary agent 登录（WebSocket）
+// @Router /ai/console/auth/login [get]
+func (b *BaseApi) WsViAuthLogin(c *gin.Context) {
+	if !websocket.IsWebSocketUpgrade(c.Request) {
+		helper.Success(c)
+		return
+	}
+	conn, err := upGrader.Upgrade(c.Writer, c.Request, nil)
+	if err != nil {
+		global.LOG.Errorf("vipanel: websocket 升级失败, err: %v", err)
+		return
+	}
+	defer conn.Close()
+
+	spec, err := vipanel.LoginSpec(
+		c.DefaultQuery("harness", vipanel.DefaultHarness),
+		c.DefaultQuery("mode", "claudeai"),
+	)
+	if wshandleError(conn, err) {
+		return
+	}
+	pty, err := vipanel.StartPty(spec)
+	if wshandleError(conn, errors.WithMessage(err, "登录进程启动失败")) {
+		return
+	}
+	defer pty.Close()
+
+	bridge := vipanel.NewPtyBridge(conn, pty)
+	// 把授权链接从原始输出里挑出来单独推给前端。
+	// 服务器上没人看屏幕，链接必须送到用户自己的设备上去打开。
+	seen := map[string]bool{}
+	bridge.Tap(func(chunk []byte) {
+		for _, u := range vipanel.ExtractURLs(chunk) {
+			if seen[u] {
+				continue
+			}
+			seen[u] = true
+			_ = bridge.Send(gin.H{"type": "auth_url", "url": u})
+		}
+	})
+	bridge.Run()
+
+	_ = bridge.Send(gin.H{"type": "auth_done", "state": vipanel.AuthStatus(
+		c.DefaultQuery("harness", vipanel.DefaultHarness))})
+}

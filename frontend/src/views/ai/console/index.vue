@@ -1,5 +1,19 @@
 <template>
-    <div class="vp-console">
+    <div class="vp-console-wrap">
+        <el-alert
+            v-if="auth.supported && !auth.loggedIn"
+            class="vp-console__banner"
+            type="warning"
+            :closable="false"
+            show-icon
+        >
+            <span>{{ $t('aiTools.console.notLoggedIn') }}</span>
+            <el-button link type="primary" size="small" @click="loginRef?.open()">
+                {{ $t('aiTools.console.loginNow') }}
+            </el-button>
+        </el-alert>
+
+        <div class="vp-console">
         <SessionList
             class="vp-console__rail"
             :sessions="sessions"
@@ -47,6 +61,8 @@
                 </div>
             </template>
         </div>
+        </div>
+        <AgentLogin ref="loginRef" @done="loadAuth" />
     </div>
 </template>
 
@@ -57,6 +73,7 @@ import { ElMessageBox } from 'element-plus';
 import Terminal from '@/components/terminal/index.vue';
 import SessionList from './components/session-list.vue';
 import Chat from './components/chat.vue';
+import AgentLogin from './components/agent-login.vue';
 import { ViPanel } from '@/api/interface/vipanel';
 import {
     activateSession,
@@ -66,6 +83,7 @@ import {
     listSessions,
     renameSession,
     restartSession,
+    getAgentAuth,
 } from '@/api/modules/vipanel';
 import { MsgError, MsgSuccess } from '@/utils/message';
 
@@ -79,12 +97,22 @@ const current = ref('');
 const connId = ref(0);
 const terminalRef = ref();
 const showTerm = ref(true);
+const loginRef = ref();
+const auth = ref<ViPanel.AuthState>({ supported: false, loggedIn: true });
 const events = ref<any[]>([]);
 let poller: ReturnType<typeof setInterval> | undefined;
 let evWS: WebSocket | undefined;
 let evToken = 0;
 
 const currentSession = computed(() => sessions.value.find((s) => s.id === current.value));
+
+const loadAuth = async () => {
+    try {
+        auth.value = (await getAgentAuth()).data;
+    } catch {
+        /* 取不到就当支持且已登录，别用一个横幅挡住整个界面 */
+    }
+};
 
 const refresh = async () => {
     const [ls, p] = await Promise.all([listSessions(), getPool()]);
@@ -216,7 +244,7 @@ const doRemove = async (s: ViPanel.Session) => {
 };
 
 onMounted(async () => {
-    await refresh();
+    await Promise.all([refresh(), loadAuth()]);
     if (sessions.value.length) await select(sessions.value[0].id);
     // 状态灯要跟着后端走（被驱逐、进程自己退出都发生在后端）
     poller = setInterval(refresh, 3000);
@@ -235,6 +263,18 @@ onBeforeUnmount(() => {
 </script>
 
 <style lang="scss" scoped>
+.vp-console-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.vp-console__banner {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
 .vp-console {
     display: grid;
     /* minmax(0,1fr) 而不是 1fr：1fr 的最小尺寸是 auto，

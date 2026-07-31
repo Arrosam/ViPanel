@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -181,4 +182,56 @@ func OpenHistory(id, cwd, title string) (*Session, error) {
 	}
 	M().Put(s)
 	return s, nil
+}
+
+// ---------------------------------------------------------------------------
+// harness 自己的登录
+// ---------------------------------------------------------------------------
+
+func AuthStatus(harnessID string) AuthState {
+	a, ok := Get(harnessID).(Authenticator)
+	if !ok {
+		// 没有登录体系的 harness 归一成「不支持但可用」，
+		// 下游就不必到处判空——demo 阶段第一天就是漏判这里炸的。
+		return AuthState{Supported: false, LoggedIn: true}
+	}
+	return a.AuthStatus()
+}
+
+func AuthLogout(harnessID string) error {
+	a, ok := Get(harnessID).(Authenticator)
+	if !ok {
+		return errors.New("当前 harness 没有登录体系")
+	}
+	return a.Logout()
+}
+
+func LoginSpec(harnessID, mode string) (PtySpec, error) {
+	a, ok := Get(harnessID).(Authenticator)
+	if !ok {
+		return PtySpec{}, errors.New("当前 harness 没有登录体系")
+	}
+	return a.LoginSpec(mode), nil
+}
+
+// urlPattern 只认 http(s)，并且在任何控制字符处断开。
+//
+// 断在控制字符上是关键：claude 用 OSC-8 超链接序列输出登录地址，
+// 形如 ESC ] 8 ; ; <URL> BEL。URL 就藏在这个序列**里面**，
+// 所以不能先把 OSC 整段剥掉再找——那样会把地址一起删掉，
+// 而这是整个登录流程唯一的出口。改成让 URL 自己终止在 BEL 上。
+var urlPattern = regexp.MustCompile(`https?://[^\x00-\x20\x7f"'` + "`" + `<>()\[\]]+`)
+
+// csiPattern 只剥 CSI（上色、光标移动）。OSC 故意不剥，理由见上。
+var csiPattern = regexp.MustCompile(`\x1b\[[0-9;?]*[a-zA-Z]`)
+
+// ExtractURLs 从一段原始终端输出里挑出链接。
+func ExtractURLs(chunk []byte) []string {
+	clean := csiPattern.ReplaceAll(chunk, nil)
+	var out []string
+	for _, m := range urlPattern.FindAll(clean, -1) {
+		// 句尾标点不属于地址。中文输出里跟的是全角标点，一并去掉。
+		out = append(out, strings.TrimRight(string(m), ".,;:。，、；："))
+	}
+	return out
 }

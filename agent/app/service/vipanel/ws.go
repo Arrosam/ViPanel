@@ -35,10 +35,27 @@ type PtyBridge struct {
 	wmu   sync.Mutex
 	close sync.Once
 	done  chan struct{}
+
+	// 旁路：登录流程要在原始输出里抓授权链接，但又不想为此另写一套 IO
+	onOut func([]byte)
 }
 
 func NewPtyBridge(conn *websocket.Conn, p *Pty) *PtyBridge {
 	return &PtyBridge{conn: conn, pty: p, done: make(chan struct{})}
+}
+
+// Tap 注册一个旁路回调，能看到 pty 的全部输出。
+func (b *PtyBridge) Tap(fn func([]byte)) { b.onOut = fn }
+
+// Send 让外部往 ws 上写一条自定义消息（与 pty 输出共用写锁）。
+func (b *PtyBridge) Send(v any) error {
+	payload, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b.wmu.Lock()
+	defer b.wmu.Unlock()
+	return b.conn.WriteMessage(websocket.TextMessage, payload)
 }
 
 // Run 阻塞到任一侧结束：进程退出、客户端断开、或读写出错。
@@ -64,6 +81,9 @@ func (b *PtyBridge) pumpOut() {
 	for {
 		n, err := b.pty.Read(buf)
 		if n > 0 {
+			if b.onOut != nil {
+				b.onOut(buf[:n])
+			}
 			if err := b.send(wsMsg{
 				Type: msgCmd,
 				Data: base64.StdEncoding.EncodeToString(buf[:n]),

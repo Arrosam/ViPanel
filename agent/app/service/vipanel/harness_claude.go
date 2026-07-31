@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -250,4 +251,50 @@ func peek(path string) *Discovered {
 		title = filepath.Base(cwd)
 	}
 	return &Discovered{Cwd: cwd, Title: title}
+}
+
+// -- Claude 自己的登录 -------------------------------------------------------
+
+func (claudeCode) AuthStatus() AuthState {
+	out, err := exec.Command("claude", "auth", "status", "--json").Output()
+	if err != nil {
+		return AuthState{Supported: true}
+	}
+	var r struct {
+		LoggedIn         bool   `json:"loggedIn"`
+		AuthMethod       string `json:"authMethod"`
+		Email            string `json:"email"`
+		SubscriptionType string `json:"subscriptionType"`
+	}
+	if json.Unmarshal(out, &r) != nil {
+		return AuthState{Supported: true}
+	}
+	return AuthState{
+		Supported: true, LoggedIn: r.LoggedIn,
+		AuthMethod: r.AuthMethod, Email: r.Email, Plan: r.SubscriptionType,
+	}
+}
+
+// LoginSpec 起一个跑 `claude auth login` 的 PTY。
+//
+// 两个环境变量是必须的，而且都是**为了阻止服务器自己去开浏览器**：
+//   - BROWSER=/usr/bin/true  让 xdg-open 之类的调用变成一个立刻成功的空操作
+//   - 清掉 DISPLAY / WAYLAND_DISPLAY
+//
+// 面板跑在服务器上，用户在别的设备上看网页。服务器上开浏览器的结果只有两种：
+// 没有图形会话时报错刷屏，有图形会话时**在服务器的屏幕上**弹出登录页——
+// 那个屏幕没人看着。正确做法是把链接提取出来交给用户，在他自己的设备上打开。
+func (claudeCode) LoginSpec(mode string) PtySpec {
+	args := []string{"auth", "login", "--claudeai"}
+	if mode == "console" {
+		args = []string{"auth", "login", "--console"}
+	}
+	return PtySpec{
+		File: "claude", Args: args, Cols: 100, Rows: 30,
+		Env: []string{"BROWSER=/usr/bin/true", "DISPLAY=", "WAYLAND_DISPLAY="},
+	}
+}
+
+func (claudeCode) Logout() error {
+	return exec.Command("claude", "auth", "logout").Run()
 }

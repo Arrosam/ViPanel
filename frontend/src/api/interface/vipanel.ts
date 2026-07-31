@@ -27,6 +27,14 @@ export namespace ViPanel {
         capabilities: Caps;
     }
 
+    export interface AuthState {
+        supported: boolean;
+        loggedIn: boolean;
+        authMethod?: string;
+        email?: string;
+        plan?: string;
+    }
+
     export interface Pool {
         size: number;
         active: number;

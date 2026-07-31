@@ -22,3 +22,7 @@ export const listHarnesses = () => http.get<ViPanel.Harness[]>(`/ai/console/harn
 export const getPool = () => http.get<ViPanel.Pool>(`/ai/console/pool`);
 
 export const updatePool = (size: number) => http.post<ViPanel.Pool>(`/ai/console/pool/update`, { size });
+
+export const getAgentAuth = () => http.get<ViPanel.AuthState>(`/ai/console/auth/status`);
+
+export const agentLogout = () => http.post(`/ai/console/auth/logout`, {});

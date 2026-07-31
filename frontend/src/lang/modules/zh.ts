@@ -674,6 +674,7 @@ const message = {
         console: {
             console: '控制台',
             empty: '还没有会话',
+            cwdPlaceholder: '工作目录，留空则用登录用户的 home',
         },
         agents: {
             agent: '智能体',

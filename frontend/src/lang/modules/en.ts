@@ -708,6 +708,7 @@ const message = {
         console: {
             console: 'Console',
             empty: 'No sessions yet',
+            cwdPlaceholder: 'Working directory, defaults to the login user home',
         },
         agents: {
             agent: 'Agent',

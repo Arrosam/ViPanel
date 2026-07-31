@@ -23,7 +23,10 @@ var (
 )
 
 func newSession(id, title, cwd string, h Harness, lastUsed int64) *Session {
-	return &Session{ID: id, Title: title, Cwd: cwd, Harness: h, lastUsed: lastUsed, stream: newStream()}
+	return &Session{
+		ID: id, Title: title, Cwd: cwd, Harness: h, lastUsed: lastUsed,
+		stream: newStream(), screen: newMirror(),
+	}
 }
 
 type SessionStatus string
@@ -47,6 +50,7 @@ type Session struct {
 	pty    *Pty
 	notes  string // 上一次停止的原因，给界面一句人话
 	stream *stream
+	screen *mirror
 
 	// 状态是**状态机**，不是时间窗。
 	// 早先用「距上次输出不到 3 秒算在忙」判定，agent 想得久一点灯就灭了——
@@ -123,6 +127,10 @@ func (s *Session) start() error {
 	s.notes = ""
 	s.touch()
 
+	// 必须立刻有人读 PTY，否则内核缓冲填满后 agent 会写阻塞卡死
+	s.screen.reset()
+	go s.pumpAgent(p)
+
 	// resume 失败会立刻退出。退回不带 resume 重来一次，不让会话卡死。
 	if resume {
 		go s.watchResumeFailure(p)
@@ -153,6 +161,8 @@ func (s *Session) watchResumeFailure(p *Pty) {
 		s.mu.Lock()
 		s.pty = np
 		s.mu.Unlock()
+		s.screen.reset()
+		go s.pumpAgent(np)
 	}
 }
 

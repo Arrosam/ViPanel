@@ -1,6 +1,7 @@
 package v2
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"os"
 	"strconv"
@@ -375,4 +376,86 @@ func (b *BaseApi) WsViAuthLogin(c *gin.Context) {
 
 	_ = bridge.Send(gin.H{"type": "auth_done", "state": vipanel.AuthStatus(
 		c.DefaultQuery("harness", vipanel.DefaultHarness))})
+}
+
+// @Tags ViPanel
+// @Summary 镜像会话的 agent 屏幕
+// @Param id query string true "会话 id"
+// @Router /ai/console/agent [get]
+func (b *BaseApi) WsConsoleAgent(c *gin.Context) {
+	if !websocket.IsWebSocketUpgrade(c.Request) {
+		helper.Success(c)
+		return
+	}
+	conn, err := upGrader.Upgrade(c.Writer, c.Request, nil)
+	if err != nil {
+		global.LOG.Errorf("vipanel: websocket 升级失败, err: %v", err)
+		return
+	}
+	defer conn.Close()
+
+	s, ok := vipanel.M().Get(c.Query("id"))
+	if !ok {
+		wshandleError(conn, errors.New("会话不存在"))
+		return
+	}
+	// 会话可能正休眠着。既然用户要看屏幕，就把它叫醒。
+	if _, err := vipanel.M().Activate(s.ID); err != nil {
+		wshandleError(conn, err)
+		return
+	}
+
+	snapshot, ch := s.AttachAgent()
+	defer s.DetachAgent(ch)
+
+	var wmu sync.Mutex
+	sendCmd := func(b []byte) error {
+		wmu.Lock()
+		defer wmu.Unlock()
+		return conn.WriteJSON(gin.H{
+			"type": "cmd", "data": base64.StdEncoding.EncodeToString(b),
+		})
+	}
+	if len(snapshot) > 0 {
+		if err := sendCmd(snapshot); err != nil {
+			return
+		}
+	}
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for {
+			_, raw, err := conn.ReadMessage()
+			if err != nil {
+				return
+			}
+			var m struct {
+				Type string `json:"type"`
+				Data string `json:"data"`
+			}
+			if json.Unmarshal(raw, &m) != nil || m.Type != "cmd" {
+				continue // resize 一律忽略：agent 的尺寸是固定的，见 mirror.go
+			}
+			data, err := base64.StdEncoding.DecodeString(m.Data)
+			if err != nil {
+				continue
+			}
+			_ = s.WriteAgent(data)
+		}
+	}()
+
+	for {
+		select {
+		case <-done:
+			return
+		case chunk, ok := <-ch:
+			if !ok {
+				return
+			}
+			if err := sendCmd(chunk); err != nil {
+				return
+			}
+		}
+	}
 }

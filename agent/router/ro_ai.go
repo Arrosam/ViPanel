@@ -16,6 +16,7 @@ func (a *AIToolsRouter) InitRouter(Router *gin.RouterGroup) {
 		// ViPanel 控制台
 		aiToolsRouter.GET("/console/pty", baseApi.WsConsolePty)
 		aiToolsRouter.GET("/console/events", baseApi.WsConsoleEvents)
+		aiToolsRouter.GET("/console/agent", baseApi.WsConsoleAgent)
 		aiToolsRouter.POST("/console/sessions", baseApi.ListViSessions)
 		aiToolsRouter.POST("/console/sessions/create", baseApi.CreateViSession)
 		aiToolsRouter.POST("/console/sessions/rename", baseApi.RenameViSession)

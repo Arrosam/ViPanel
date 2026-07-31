@@ -39,6 +39,10 @@ func (claudeCode) Capabilities() Capabilities {
 // --resume 不带 --fork-session 时**复用**原 session id，transcript 还是同一个
 // 文件，历史不丢。带上 --fork-session 会分叉出新 id，那不是我们要的。
 func (claudeCode) Spawn(ctx SpawnContext) PtySpec {
+	// 起进程前先把首次运行向导标记掉，否则会话会卡在向导里，
+	// 而向导只存在于 agent 屏幕上，transcript 里一个字都没有
+	ensureOnboarded(ctx.Cwd)
+
 	args := []string{"--session-id", ctx.SessionID}
 	if ctx.Resume {
 		args = []string{"--resume", ctx.SessionID}
@@ -297,4 +301,95 @@ func (claudeCode) LoginSpec(mode string) PtySpec {
 
 func (claudeCode) Logout() error {
 	return exec.Command("claude", "auth", "logout").Run()
+}
+
+// -- 首次运行向导 -----------------------------------------------------------
+
+// ensureOnboarded 把 claude 的首次运行向导标记为已完成。
+//
+// 为什么要做这件事：全新机器上第一次跑 claude 会进一个交互式向导
+// （选主题 → 选登录方式 → 授权）。面板**已经**通过自己的登录流程做过授权了，
+// 再让用户在 agent 屏幕里把同一件事重做一遍纯属多余；更糟的是，
+// 如果用户不知道要去看 agent 屏幕，会话就静静地卡在那儿，
+// 表现为「发消息没反应」——极难查。
+//
+// 只补缺失的键，绝不覆盖已有值：用户自己选过的主题必须留着。
+//
+// projects[cwd].hasTrustDialogAccepted 也一并补上。那个对话框问的是
+// 「你信任这个目录里的文件吗」，而用户刚刚**指定这个目录建了一个会话**，
+// 那就是同一件事的答复。
+func ensureOnboarded(cwd string) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+	path := filepath.Join(home, ".claude.json")
+
+	cfg := map[string]any{}
+	if raw, err := os.ReadFile(path); err == nil {
+		if json.Unmarshal(raw, &cfg) != nil {
+			return // 解析不了就别动它，写坏了比不写糟得多
+		}
+	}
+
+	changed := false
+	setIfAbsent := func(k string, v any) {
+		if _, ok := cfg[k]; !ok {
+			cfg[k] = v
+			changed = true
+		}
+	}
+	setIfAbsent("hasCompletedOnboarding", true)
+	setIfAbsent("theme", "dark")
+
+	// 一次性提示（新渲染器推荐、版本更新说明之类）同样会挡在输入框前面。
+	// 它们各自有一个计数器/水位线，预置成「已经看过」即可跳过。
+	//
+	// 这是一份**会过时的清单**：claude 每个版本都可能新增这类提示，
+	// 而新的那一个我们不认识。所以它只是把常见情况铺平，不是根治。
+	// 真正的兜底是 agent PTY 一直有人在读（见 mirror.go）——
+	// 那保证的是「不会因为缓冲写满而死锁」，不是「不会被弹窗挡住」。
+	setIfAbsent("fullscreenUpsellSeenCount", 99)
+	setIfAbsent("passesUpsellSeenCount", 99)
+	if v := claudeVersion(); v != "" {
+		setIfAbsent("lastReleaseNotesSeen", v)
+	}
+
+	if cwd != "" {
+		projects, _ := cfg["projects"].(map[string]any)
+		if projects == nil {
+			projects = map[string]any{}
+		}
+		p, _ := projects[cwd].(map[string]any)
+		if p == nil {
+			p = map[string]any{}
+		}
+		if v, ok := p["hasTrustDialogAccepted"]; !ok || v != true {
+			p["hasTrustDialogAccepted"] = true
+			projects[cwd] = p
+			cfg["projects"] = projects
+			changed = true
+		}
+	}
+	if !changed {
+		return
+	}
+	raw, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return
+	}
+	_ = os.WriteFile(path, raw, 0o600)
+}
+
+// claudeVersion 取「2.1.220」这样的版本号，取不到返回空串。
+func claudeVersion() string {
+	out, err := exec.Command("claude", "--version").Output()
+	if err != nil {
+		return ""
+	}
+	f := strings.Fields(string(out))
+	if len(f) == 0 {
+		return ""
+	}
+	return f[0]
 }

@@ -707,6 +707,8 @@ const message = {
             notLoggedIn: 'Agent 未登录',
             loginNow: '去登录',
             logout: '登出',
+            agentScreen: 'Agent 屏幕',
+            paneNone: '仅聊天',
             status: {
                 idle: '空闲',
                 working: '处理中',

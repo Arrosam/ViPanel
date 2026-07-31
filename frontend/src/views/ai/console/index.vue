@@ -40,8 +40,9 @@
                     <el-switch
                         v-model="showTerm"
                         size="small"
-                        :active-text="$t('aiTools.console.terminal')"
                         inline-prompt
+                        :active-text="$t('aiTools.console.terminal')"
+                        :inactive-text="$t('aiTools.console.terminal')"
                     />
                     <el-button plain size="small" @click="reconnect">
                         {{ $t('commons.button.conn') }}
@@ -56,7 +57,7 @@
                         @interrupt="interrupt"
                     />
                     <div v-show="showTerm" class="vp-console__term">
-                        <Terminal :key="`${current}-${connId}`" ref="terminalRef" />
+                        <Terminal :key="`term-${current}-${connId}`" ref="terminalRef" />
                     </div>
                 </div>
             </template>
@@ -67,7 +68,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { ElMessageBox } from 'element-plus';
 import Terminal from '@/components/terminal/index.vue';
@@ -124,9 +125,11 @@ const refresh = async () => {
     }
 };
 
+// 只负责下半栏的「终端」形态。Agent 屏幕是独立组件，
+// 因为它必须用固定尺寸的 xterm，而上游 Terminal 一律 fit 到面板宽度。
 const connect = () => {
     const s = currentSession.value;
-    if (!s) return;
+    if (!s || !showTerm.value) return;
     terminalRef.value?.acceptParams({
         endpoint: '/api/v2/ai/console/pty',
         args: `cwd=${encodeURIComponent(s.cwd)}`,
@@ -134,6 +137,8 @@ const connect = () => {
         initCmd: '',
     });
 };
+
+watch(showTerm, () => remount());
 
 // 换会话/重连都靠换 Terminal 的 key 整组件重挂载。
 // 上游 Terminal 的 closeRealTerminal 没有 token 校验，旧 socket 的 close 晚到时

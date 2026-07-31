@@ -741,6 +741,8 @@ const message = {
             notLoggedIn: 'Agent not signed in',
             loginNow: 'Sign in',
             logout: 'Sign out',
+            agentScreen: 'Agent screen',
+            paneNone: 'Chat only',
             status: {
                 idle: 'Idle',
                 working: 'Working',

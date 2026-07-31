@@ -3,6 +3,7 @@ package vipanel
 import (
 	"strings"
 	"sync"
+	"time"
 )
 
 // 会话的事件订阅。一个会话可以同时被多台设备看着。
@@ -11,11 +12,12 @@ type subscriber struct {
 }
 
 type stream struct {
-	mu    sync.Mutex
-	subs  map[*subscriber]struct{}
-	tail  *Tailer
-	hist  []Event
-	ready bool
+	mu      sync.Mutex
+	subs    map[*subscriber]struct{}
+	tail    *Tailer
+	hist    []Event
+	ready   bool
+	waiting bool // 已经有一个 goroutine 在等 transcript 出现
 }
 
 func newStream() *stream {
@@ -34,15 +36,26 @@ func (s *Session) ensureStream() {
 		st.mu.Unlock()
 		return
 	}
-	path := ""
-	if s.Harness.Capabilities().StructuredEvents {
-		path = transcriptPath(s.ID)
-	}
-	if path == "" {
+	if !s.Harness.Capabilities().StructuredEvents {
 		st.ready = true // 没有结构化记录的 harness，聊天面板就是空的
 		st.mu.Unlock()
 		return
 	}
+
+	path := transcriptPath(s.ID)
+	if path == "" {
+		// 全新会话的 transcript 要等第一条消息才被创建。
+		// **这里不能置 ready** —— 置了这条流就永久失效：
+		// 之后文件出现了也没人去接，聊天面板会一直是空的，
+		// 而 agent 其实回得好好的。这个 bug 真实发生过。
+		if !st.waiting {
+			st.waiting = true
+			go s.waitTranscript()
+		}
+		st.mu.Unlock()
+		return
+	}
+	// 先同步读完历史再从末尾接着 tail
 	st.hist = ReadTranscript(path)
 	st.tail = NewTailer(path, true)
 	st.ready = true
@@ -167,3 +180,55 @@ func (s *Session) stopStream() {
 }
 
 func (s *subscriber) Ch() <-chan []Event { return s.ch }
+
+// waitTranscript 等 transcript 文件出现。
+//
+// 新会话在说第一句话之前是没有这个文件的，而订阅往往发生在那之前
+// （用户点开会话就连上了事件流）。轮询到文件出现后补上历史并开始 tail，
+// 已经连着的订阅者会立刻收到这批事件。
+func (s *Session) waitTranscript() {
+	st := s.stream
+	for i := 0; i < 1200; i++ { // 最多等 10 分钟，之后认定这个会话不会说话了
+		time.Sleep(500 * time.Millisecond)
+
+		st.mu.Lock()
+		if st.ready { // 别处已经接上了
+			st.waiting = false
+			st.mu.Unlock()
+			return
+		}
+		st.mu.Unlock()
+
+		path := transcriptPath(s.ID)
+		if path == "" {
+			continue
+		}
+
+		hist := ReadTranscript(path)
+		tail := NewTailer(path, true)
+
+		st.mu.Lock()
+		st.hist = hist
+		st.tail = tail
+		st.ready = true
+		st.waiting = false
+		subs := make([]*subscriber, 0, len(st.subs))
+		for sub := range st.subs {
+			subs = append(subs, sub)
+		}
+		st.mu.Unlock()
+
+		// 补发给已经连着的订阅者：他们当初收到的是一个空历史
+		for _, sub := range subs {
+			select {
+			case sub.ch <- hist:
+			default:
+			}
+		}
+		go tail.Run(func(evs []Event) { s.onEvents(evs) })
+		return
+	}
+	st.mu.Lock()
+	st.waiting = false
+	st.mu.Unlock()
+}

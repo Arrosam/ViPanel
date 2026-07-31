@@ -718,6 +718,12 @@ const message = {
             finish: 'End session',
             finishHint: 'This kills the session process. The transcript stays on disk.',
             poolState: 'Running {0} / {1}',
+            chatEmpty: 'No conversation in this session yet',
+            inputHint: 'Type a message, Enter to send',
+            thinking: 'Thinking',
+            send: 'Send',
+            stop: 'Stop',
+            terminal: 'Terminal',
             status: {
                 idle: 'Idle',
                 working: 'Working',

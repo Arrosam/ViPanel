@@ -1,6 +1,7 @@
 package vipanel
 
 import (
+	"errors"
 	"sync"
 	"time"
 
@@ -15,6 +16,15 @@ const (
 	agentCols = 120
 	agentRows = 40
 )
+
+var (
+	errNoAgent      = errors.New("agent 没有在运行")
+	errNotSupported = errors.New("当前 harness 不支持这个操作")
+)
+
+func newSession(id, title, cwd string, h Harness, lastUsed int64) *Session {
+	return &Session{ID: id, Title: title, Cwd: cwd, Harness: h, lastUsed: lastUsed, stream: newStream()}
+}
 
 type SessionStatus string
 
@@ -33,9 +43,10 @@ type Session struct {
 	Cwd     string
 	Harness Harness
 
-	mu    sync.Mutex
-	pty   *Pty
-	notes string // 上一次停止的原因，给界面一句人话
+	mu     sync.Mutex
+	pty    *Pty
+	notes  string // 上一次停止的原因，给界面一句人话
+	stream *stream
 
 	// 状态是**状态机**，不是时间窗。
 	// 早先用「距上次输出不到 3 秒算在忙」判定，agent 想得久一点灯就灭了——

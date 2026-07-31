@@ -77,6 +77,7 @@ func (m *Manager) Remove(id string) {
 	delete(m.sessions, id)
 	m.mu.Unlock()
 	if s != nil {
+		s.stopStream()
 		s.stop("会话已结束")
 	}
 }

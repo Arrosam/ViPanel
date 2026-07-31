@@ -78,3 +78,19 @@ func List() []Harness {
 }
 
 const DefaultHarness = "claude-code"
+
+// Discovered 是磁盘上还没被面板收录的一段历史对话。
+type Discovered struct {
+	ID    string `json:"id"`
+	Cwd   string `json:"cwd"`
+	Title string `json:"title"`
+	Mtime int64  `json:"mtime"`
+	Size  int64  `json:"size"`
+}
+
+// Discoverer 由「自己维护对话记录」的 harness 实现。
+// 不进 Harness 主接口：没有结构化记录的 harness 根本没有这个概念，
+// 硬塞进去只会逼它们写一个返回 nil 的空方法。
+type Discoverer interface {
+	Discover(known map[string]bool, limit int) []Discovered
+}

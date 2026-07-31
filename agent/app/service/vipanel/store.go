@@ -27,13 +27,7 @@ func Restore() {
 		if st, err := os.Stat(r.Cwd); err != nil || !st.IsDir() {
 			continue
 		}
-		M().Put(&Session{
-			ID:       r.SessionID,
-			Title:    r.Title,
-			Cwd:      r.Cwd,
-			Harness:  Get(r.Harness),
-			lastUsed: r.LastUsed,
-		})
+		M().Put(newSession(r.SessionID, r.Title, r.Cwd, Get(r.Harness), r.LastUsed))
 		n++
 	}
 	if n > 0 {
@@ -54,13 +48,7 @@ func Create(cwd, title, harnessID string) (*Session, error) {
 	}
 	h := Get(harnessID)
 
-	s := &Session{
-		ID:       uuid.NewString(),
-		Title:    title,
-		Cwd:      cwd,
-		Harness:  h,
-		lastUsed: time.Now().UnixMilli(),
-	}
+	s := newSession(uuid.NewString(), title, cwd, h, time.Now().UnixMilli())
 	row := model.ViSession{
 		SessionID: s.ID, Title: s.Title, Cwd: s.Cwd,
 		Harness: h.ID(), LastUsed: s.lastUsed,
@@ -147,4 +135,50 @@ func saveSetting(key, value string) {
 		return
 	}
 	_ = global.DB.Model(&model.Setting{}).Where("key = ?", key).Update("value", value).Error
+}
+
+// History 列出磁盘上还没被面板收录的历史对话。
+func History(harnessID string, limit int) []Discovered {
+	d, ok := Get(harnessID).(Discoverer)
+	if !ok {
+		return []Discovered{}
+	}
+	known := map[string]bool{}
+	for _, s := range M().All() {
+		known[s.ID] = true
+	}
+	out := d.Discover(known, limit)
+	if out == nil {
+		return []Discovered{}
+	}
+	return out
+}
+
+// OpenHistory 把一段磁盘上的对话收进面板，**沿用原 session id**。
+//
+// 沿用 id 是整件事的关键：新建一个 id 等于开一段全新对话，原来的记录还在磁盘上
+// 但面板再也指不到它了，用户看到的就是「点开之后是空的」。
+func OpenHistory(id, cwd, title string) (*Session, error) {
+	if id == "" || cwd == "" {
+		return nil, errors.New("缺少 id 或工作目录")
+	}
+	if s, ok := M().Get(id); ok {
+		return s, nil // 已经收录过了，直接返回
+	}
+	if st, err := os.Stat(cwd); err != nil || !st.IsDir() {
+		return nil, errors.New("原工作目录已不存在")
+	}
+	if title = strings.TrimSpace(title); title == "" {
+		title = filepath.Base(cwd)
+	}
+	h := Get(DefaultHarness)
+	s := newSession(id, title, cwd, h, time.Now().UnixMilli())
+	row := model.ViSession{
+		SessionID: id, Title: title, Cwd: cwd, Harness: h.ID(), LastUsed: s.lastUsed,
+	}
+	if err := global.DB.Create(&row).Error; err != nil {
+		return nil, err
+	}
+	M().Put(s)
+	return s, nil
 }

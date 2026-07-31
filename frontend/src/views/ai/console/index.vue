@@ -23,12 +23,27 @@
                         {{ currentSession.harness }}
                     </el-tag>
                     <div class="grow" />
+                    <el-switch
+                        v-model="showTerm"
+                        size="small"
+                        :active-text="$t('aiTools.console.terminal')"
+                        inline-prompt
+                    />
                     <el-button plain size="small" @click="reconnect">
                         {{ $t('commons.button.conn') }}
                     </el-button>
                 </div>
-                <div class="vp-console__term">
-                    <Terminal :key="`${current}-${connId}`" ref="terminalRef" />
+                <div class="vp-console__panes" :class="{ 'no-term': !showTerm }">
+                    <Chat
+                        :events="events"
+                        :busy="currentSession?.status === 'working'"
+                        :can-interrupt="!!currentSession?.capabilities.interrupt"
+                        @send="sendMessage"
+                        @interrupt="interrupt"
+                    />
+                    <div v-show="showTerm" class="vp-console__term">
+                        <Terminal :key="`${current}-${connId}`" ref="terminalRef" />
+                    </div>
                 </div>
             </template>
         </div>
@@ -41,6 +56,7 @@ import { useI18n } from 'vue-i18n';
 import { ElMessageBox } from 'element-plus';
 import Terminal from '@/components/terminal/index.vue';
 import SessionList from './components/session-list.vue';
+import Chat from './components/chat.vue';
 import { ViPanel } from '@/api/interface/vipanel';
 import {
     activateSession,
@@ -62,7 +78,11 @@ const pool = ref<ViPanel.Pool>({ size: 2, active: 0, order: [] });
 const current = ref('');
 const connId = ref(0);
 const terminalRef = ref();
+const showTerm = ref(true);
+const events = ref<any[]>([]);
 let poller: ReturnType<typeof setInterval> | undefined;
+let evWS: WebSocket | undefined;
+let evToken = 0;
 
 const currentSession = computed(() => sessions.value.find((s) => s.id === current.value));
 
@@ -105,10 +125,41 @@ const select = async (id: string) => {
         /* 激活失败也让终端连上去，错误由终端自己显示 */
     }
     await refresh();
+    connectEvents(id);
     await remount();
 };
 
 const reconnect = () => remount();
+
+// 事件流：先收一次 history 全量渲染，之后增量追加。
+// 两者分开是必要的——混在一起前端分不清哪些该一次性铺开、哪些该滚动追加。
+const connectEvents = (id: string) => {
+    const token = ++evToken;
+    try {
+        evWS?.close();
+    } catch {
+        /* 已断开 */
+    }
+    events.value = [];
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    const ws = new WebSocket(`${proto}://${location.host}/api/v2/ai/console/events?id=${id}`);
+    evWS = ws;
+    ws.onmessage = (ev) => {
+        if (token !== evToken) return; // 迟到的旧会话消息，丢弃
+        const msg = JSON.parse(ev.data);
+        if (msg.type === 'history') events.value = msg.events || [];
+        else if (msg.type === 'events') events.value.push(...(msg.events || []));
+        else if (msg.type === 'error') MsgError(msg.message);
+    };
+};
+
+const sendMessage = (text: string) => {
+    if (evWS?.readyState === 1) evWS.send(JSON.stringify({ type: 'message', text }));
+};
+
+const interrupt = () => {
+    if (evWS?.readyState === 1) evWS.send(JSON.stringify({ type: 'interrupt' }));
+};
 
 const openCreate = async () => {
     try {
@@ -173,6 +224,12 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
     if (poller) clearInterval(poller);
+    evToken++;
+    try {
+        evWS?.close();
+    } catch {
+        /* 已断开 */
+    }
     terminalRef.value?.onClose();
 });
 </script>
@@ -183,6 +240,9 @@ onBeforeUnmount(() => {
     /* minmax(0,1fr) 而不是 1fr：1fr 的最小尺寸是 auto，
        终端里一行长输出就会把整列撑破 */
     grid-template-columns: 232px minmax(0, 1fr);
+    /* 行也要显式约束：只写 columns 的话隐式行是 auto，会被内容撑开，
+       整条 min-height:0 的链就断在这里 */
+    grid-template-rows: minmax(0, 1fr);
     height: calc(100vh - 120px);
     min-height: 360px;
     border: 1px solid var(--el-border-color-light);
@@ -191,10 +251,16 @@ onBeforeUnmount(() => {
     background: var(--el-bg-color);
 }
 
+/* grid item 的 min-height 默认是 auto，不显式清零就会被内容撑破 */
+.vp-console__rail,
+.vp-console__main {
+    min-height: 0;
+    min-width: 0;
+}
+
 .vp-console__main {
     display: flex;
     flex-direction: column;
-    min-width: 0;
 }
 
 .vp-console__blank {
@@ -223,9 +289,21 @@ onBeforeUnmount(() => {
     flex: 1;
 }
 
-.vp-console__term {
+.vp-console__panes {
     flex: 1;
     min-height: 0;
+    display: grid;
+    /* 终端占下半，关掉时聊天独占。minmax(0,·) 是必须的：
+       1fr 的最小尺寸是 auto，终端一行长输出就会把整块撑破 */
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+}
+.vp-console__panes.no-term {
+    grid-template-rows: minmax(0, 1fr);
+}
+
+.vp-console__term {
+    min-height: 0;
     overflow: hidden;
+    border-top: 1px solid var(--el-border-color-light);
 }
 </style>

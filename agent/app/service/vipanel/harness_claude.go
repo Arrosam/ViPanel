@@ -1,8 +1,12 @@
 package vipanel
 
 import (
+	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"time"
 )
 
@@ -119,3 +123,131 @@ func (shellHarness) Spawn(ctx SpawnContext) PtySpec {
 func (shellHarness) Submit(write func([]byte), text string) { write([]byte(text + "\n")) }
 func (shellHarness) Interrupt(write func([]byte))           { write([]byte{0x03}) }
 func (shellHarness) HasHistory(string, string) bool         { return false }
+
+// Discover 扫 ~/.claude/projects，列出还没被面板收录的对话。
+//
+// 只读文件头尾各一小段来取 cwd 和标题：单个 transcript 可以到几十上百 MB，
+// 为了列个目录把它们整个读一遍是不可接受的。
+func (claudeCode) Discover(known map[string]bool, limit int) []Discovered {
+	root := projectsDir()
+	if root == "" {
+		return nil
+	}
+	dirs, err := os.ReadDir(root)
+	if err != nil {
+		return nil
+	}
+	var out []Discovered
+	for _, d := range dirs {
+		if !d.IsDir() {
+			continue
+		}
+		entries, err := os.ReadDir(filepath.Join(root, d.Name()))
+		if err != nil {
+			continue
+		}
+		for _, e := range entries {
+			name := e.Name()
+			if !strings.HasSuffix(name, ".jsonl") {
+				continue
+			}
+			id := strings.TrimSuffix(name, ".jsonl")
+			if known[id] {
+				continue
+			}
+			full := filepath.Join(root, d.Name(), name)
+			st, err := os.Stat(full)
+			if err != nil || st.Size() == 0 {
+				continue
+			}
+			meta := peek(full)
+			if meta == nil {
+				continue // 空会话或损坏，列出来只是噪音
+			}
+			meta.ID = id
+			meta.Mtime = st.ModTime().UnixMilli()
+			meta.Size = st.Size()
+			out = append(out, *meta)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Mtime > out[j].Mtime })
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
+	}
+	return out
+}
+
+const peekWindow = 64 << 10
+
+// peek 读头尾各一小段，取 cwd / 标题 / 是否真的有对话。
+func peek(path string) *Discovered {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+	st, err := f.Stat()
+	if err != nil {
+		return nil
+	}
+
+	read := func(off int64, n int64) []byte {
+		if n > st.Size()-off {
+			n = st.Size() - off
+		}
+		if n <= 0 {
+			return nil
+		}
+		buf := make([]byte, n)
+		if _, err := f.ReadAt(buf, off); err != nil && err != io.EOF {
+			return nil
+		}
+		return buf
+	}
+	chunks := [][]byte{read(0, peekWindow)}
+	if st.Size() > peekWindow {
+		chunks = append(chunks, read(st.Size()-peekWindow, peekWindow))
+	}
+
+	var cwd, title string
+	hasConversation := false
+	for _, chunk := range chunks {
+		for _, line := range strings.Split(string(chunk), "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
+			var r struct {
+				Type        string `json:"type"`
+				Cwd         string `json:"cwd"`
+				CustomTitle string `json:"customTitle"`
+				Title       string `json:"title"`
+			}
+			if json.Unmarshal([]byte(line), &r) != nil {
+				continue // 头尾截断处必然有半行，跳过
+			}
+			if cwd == "" && r.Cwd != "" {
+				cwd = r.Cwd
+			}
+			switch r.Type {
+			case "custom-title":
+				if r.CustomTitle != "" {
+					title = r.CustomTitle
+				}
+			case "ai-title":
+				if title == "" && r.Title != "" {
+					title = r.Title
+				}
+			case "assistant":
+				hasConversation = true
+			}
+		}
+	}
+	if !hasConversation || cwd == "" {
+		return nil
+	}
+	if title == "" {
+		title = filepath.Base(cwd)
+	}
+	return &Discovered{Cwd: cwd, Title: title}
+}

@@ -684,6 +684,12 @@ const message = {
             finish: '结束会话',
             finishHint: '会终止这个会话的进程。对话记录保留在磁盘上。',
             poolState: '运行中 {0} / {1}',
+            chatEmpty: '这个会话还没有对话',
+            inputHint: '输入消息，Enter 发送',
+            thinking: '思考过程',
+            send: '发送',
+            stop: '中断',
+            terminal: '终端',
             status: {
                 idle: '空闲',
                 working: '处理中',

@@ -4,12 +4,18 @@ import (
 	"github.com/1Panel-dev/1Panel/agent/app/dto"
 	"github.com/1Panel-dev/1Panel/agent/app/dto/request"
 	"github.com/1Panel-dev/1Panel/agent/app/service"
+	"github.com/1Panel-dev/1Panel/agent/app/service/vipanel"
 	"github.com/1Panel-dev/1Panel/agent/constant"
 	"github.com/1Panel-dev/1Panel/agent/global"
 	"github.com/1Panel-dev/1Panel/agent/utils/common"
 )
 
 func Init() {
+	// ViPanel：读回会话与实例池上限。只重建条目，不启动任何 agent 进程——
+	// 起不起由实例池按 LRU 决定。放在同步执行，界面第一次拉列表就得能看到。
+	vipanel.LoadPoolSize()
+	vipanel.Restore()
+
 	go syncApp()
 	go syncInstalledApp()
 	go syncRuntime()

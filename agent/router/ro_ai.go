@@ -15,6 +15,15 @@ func (a *AIToolsRouter) InitRouter(Router *gin.RouterGroup) {
 	{
 		// ViPanel 控制台
 		aiToolsRouter.GET("/console/pty", baseApi.WsConsolePty)
+		aiToolsRouter.POST("/console/sessions", baseApi.ListViSessions)
+		aiToolsRouter.POST("/console/sessions/create", baseApi.CreateViSession)
+		aiToolsRouter.POST("/console/sessions/rename", baseApi.RenameViSession)
+		aiToolsRouter.POST("/console/sessions/delete", baseApi.DeleteViSession)
+		aiToolsRouter.POST("/console/sessions/activate", baseApi.ActivateViSession)
+		aiToolsRouter.POST("/console/sessions/restart", baseApi.RestartViSession)
+		aiToolsRouter.GET("/console/harnesses", baseApi.ListViHarnesses)
+		aiToolsRouter.GET("/console/pool", baseApi.GetViPool)
+		aiToolsRouter.POST("/console/pool/update", baseApi.UpdateViPool)
 
 		aiToolsRouter.POST("/ollama/close", baseApi.CloseOllamaModel)
 		aiToolsRouter.POST("/ollama/model", baseApi.CreateOllamaModel)

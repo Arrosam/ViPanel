@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/1Panel-dev/1Panel/agent/app/api/v2/helper"
+	"github.com/1Panel-dev/1Panel/agent/app/dto"
 	"github.com/1Panel-dev/1Panel/agent/app/service/vipanel"
 	"github.com/1Panel-dev/1Panel/agent/global"
 	"github.com/gin-gonic/gin"
@@ -61,4 +62,125 @@ func (b *BaseApi) WsConsolePty(c *gin.Context) {
 	defer pty.Close()
 
 	vipanel.NewPtyBridge(conn, pty).Run()
+}
+
+// ---------------------------------------------------------------------------
+// 会话
+// ---------------------------------------------------------------------------
+
+// @Tags ViPanel
+// @Summary 会话列表
+// @Success 200 {array} dto.ViSessionItem
+// @Router /ai/console/sessions [post]
+func (b *BaseApi) ListViSessions(c *gin.Context) {
+	helper.SuccessWithData(c, vipanel.ListItems())
+}
+
+// @Tags ViPanel
+// @Summary 新建会话
+// @Router /ai/console/sessions/create [post]
+func (b *BaseApi) CreateViSession(c *gin.Context) {
+	var req dto.ViSessionCreate
+	if err := helper.CheckBindAndValidate(&req, c); err != nil {
+		return
+	}
+	s, err := vipanel.Create(req.Cwd, req.Title, req.Harness)
+	if err != nil {
+		helper.BadRequest(c, err)
+		return
+	}
+	helper.SuccessWithData(c, vipanel.ToItem(s))
+}
+
+// @Tags ViPanel
+// @Summary 重命名会话
+// @Router /ai/console/sessions/rename [post]
+func (b *BaseApi) RenameViSession(c *gin.Context) {
+	var req dto.ViSessionRename
+	if err := helper.CheckBindAndValidate(&req, c); err != nil {
+		return
+	}
+	if err := vipanel.Rename(req.ID, req.Title); err != nil {
+		helper.BadRequest(c, err)
+		return
+	}
+	helper.Success(c)
+}
+
+// @Tags ViPanel
+// @Summary 结束会话
+// @Router /ai/console/sessions/delete [post]
+func (b *BaseApi) DeleteViSession(c *gin.Context) {
+	var req dto.ViSessionID
+	if err := helper.CheckBindAndValidate(&req, c); err != nil {
+		return
+	}
+	if err := vipanel.Delete(req.ID); err != nil {
+		helper.InternalServer(c, err)
+		return
+	}
+	helper.Success(c)
+}
+
+// @Tags ViPanel
+// @Summary 激活会话（必要时驱逐别的）
+// @Router /ai/console/sessions/activate [post]
+func (b *BaseApi) ActivateViSession(c *gin.Context) {
+	var req dto.ViSessionID
+	if err := helper.CheckBindAndValidate(&req, c); err != nil {
+		return
+	}
+	s, err := vipanel.M().Activate(req.ID)
+	if err != nil {
+		helper.BadRequest(c, err)
+		return
+	}
+	vipanel.Touch(req.ID)
+	helper.SuccessWithData(c, vipanel.ToItem(s))
+}
+
+// @Tags ViPanel
+// @Summary 重启会话的 agent 进程（对话保留）
+// @Router /ai/console/sessions/restart [post]
+func (b *BaseApi) RestartViSession(c *gin.Context) {
+	var req dto.ViSessionID
+	if err := helper.CheckBindAndValidate(&req, c); err != nil {
+		return
+	}
+	s, err := vipanel.Restart(req.ID)
+	if err != nil {
+		helper.BadRequest(c, err)
+		return
+	}
+	helper.SuccessWithData(c, vipanel.ToItem(s))
+}
+
+// ---------------------------------------------------------------------------
+// harness 与实例池
+// ---------------------------------------------------------------------------
+
+// @Tags ViPanel
+// @Summary 可用的 harness
+// @Router /ai/console/harnesses [get]
+func (b *BaseApi) ListViHarnesses(c *gin.Context) {
+	helper.SuccessWithData(c, vipanel.Harnesses())
+}
+
+// @Tags ViPanel
+// @Summary 实例池状态
+// @Router /ai/console/pool [get]
+func (b *BaseApi) GetViPool(c *gin.Context) {
+	helper.SuccessWithData(c, vipanel.PoolInfo())
+}
+
+// @Tags ViPanel
+// @Summary 设置实例池上限
+// @Router /ai/console/pool/update [post]
+func (b *BaseApi) UpdateViPool(c *gin.Context) {
+	var req dto.ViPoolSize
+	if err := helper.CheckBindAndValidate(&req, c); err != nil {
+		return
+	}
+	vipanel.SetPoolSize(req.Size)
+	helper.SuccessWithData(c, vipanel.PoolInfo())
 }

@@ -123,9 +123,13 @@ func (s *Session) Send(text string) error {
 	s.Harness.Submit(func(b []byte) { _, _ = p.Write(b) }, text)
 
 	s.mu.Lock()
-	// 斜杠命令不产生 assistant 正文，置了 awaitingReply 就永远清不掉，
-	// 会话会一直卡在「处理中」。
-	if !strings.HasPrefix(strings.TrimLeft(text, " \t"), "/") {
+	// awaitingReply 只在**有东西能把它清掉**的时候才置位。
+	// 清它的唯一信号是 assistant 正文事件，所以：
+	//   - harness 不产生结构化事件（shell 就是）→ 永远等不到，别置
+	//   - 斜杠命令不产生 assistant 正文 → 同理别置
+	// 两者都会让会话永久卡在「处理中」。这条是 shell harness 测出来的。
+	if s.Harness.Capabilities().StructuredEvents &&
+		!strings.HasPrefix(strings.TrimLeft(text, " \t"), "/") {
 		s.awaitingReply = true
 	}
 	s.unread = false

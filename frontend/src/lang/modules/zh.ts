@@ -716,6 +716,12 @@ const message = {
             agentAsks: 'Agent 有个问题',
             permOff: '权限代理未生效',
             permOffHint: '工具调用不会经过面板确认，agent 会直接以当前权限执行。',
+            files: '文件',
+            fileUp: '上级目录',
+            fileHome: '回到会话目录',
+            fileMkdir: '新建文件夹',
+            fileUpload: '上传到当前目录',
+            fileEmpty: '这个目录是空的',
             status: {
                 idle: '空闲',
                 working: '处理中',

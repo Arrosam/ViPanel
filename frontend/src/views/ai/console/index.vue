@@ -24,17 +24,34 @@
         />
 
         <div class="vp-console">
-        <SessionList
-            class="vp-console__rail"
-            :sessions="sessions"
-            :current="current"
-            :pool="pool"
-            @select="select"
-            @create="openCreate"
-            @rename="doRename"
-            @restart="doRestart"
-            @remove="doRemove"
-        />
+        <div class="vp-console__rail">
+            <div class="vp-rail__tabs">
+                <button class="vp-rtab" :class="{ on: tab === 'sessions' }" @click="tab = 'sessions'">
+                    {{ $t('aiTools.console.sessions') }}
+                </button>
+                <button class="vp-rtab" :class="{ on: tab === 'files' }" @click="tab = 'files'">
+                    {{ $t('aiTools.console.files') }}
+                </button>
+            </div>
+            <SessionList
+                v-show="tab === 'sessions'"
+                class="vp-rail__body"
+                :sessions="sessions"
+                :current="current"
+                :pool="pool"
+                @select="select"
+                @create="openCreate"
+                @rename="doRename"
+                @restart="doRestart"
+                @remove="doRemove"
+            />
+            <FilePanel
+                v-show="tab === 'files'"
+                class="vp-rail__body"
+                :cwd="currentSession?.cwd || ''"
+                @insert="insertPath"
+            />
+        </div>
 
         <div class="vp-console__main">
             <div v-if="!current" class="vp-console__blank">
@@ -84,6 +101,7 @@ import { useI18n } from 'vue-i18n';
 import { ElMessageBox } from 'element-plus';
 import Terminal from '@/components/terminal/index.vue';
 import SessionList from './components/session-list.vue';
+import FilePanel from './components/file-panel.vue';
 import Chat from './components/chat.vue';
 import AgentLogin from './components/agent-login.vue';
 import Permission from './components/permission.vue';
@@ -114,6 +132,17 @@ const loginRef = ref();
 const auth = ref<ViPanel.AuthState>({ supported: false, loggedIn: true, hookInstalled: true });
 const events = ref<any[]>([]);
 const perm = ref<any>(null);
+const tab = ref<'sessions' | 'files'>('sessions');
+
+// 单引号包裹并转义内部单引号——文件名带空格或引号时，
+// 直接插裸路径会让用户回车后吃一个语法错误
+const shellQuote = (p: string) => (/[^\w@%+=:,./-]/.test(p) ? `'${p.replace(/'/g, `'\\''`)}' ` : `${p} `);
+
+const insertPath = (path: string) => {
+    if (showTerm.value && terminalRef.value?.isWsOpen?.()) {
+        terminalRef.value.sendMsg(shellQuote(path), '');
+    }
+};
 let poller: ReturnType<typeof setInterval> | undefined;
 let evWS: WebSocket | undefined;
 let evToken = 0;
@@ -315,6 +344,35 @@ onBeforeUnmount(() => {
 }
 
 /* grid item 的 min-height 默认是 auto，不显式清零就会被内容撑破 */
+.vp-console__rail {
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--el-border-color-light);
+}
+.vp-rail__tabs {
+    flex: none;
+    display: flex;
+    border-bottom: 1px solid var(--el-border-color-lighter);
+}
+.vp-rtab {
+    flex: 1;
+    min-width: 0;
+    padding: 7px 4px;
+    font: 600 11px/1 inherit;
+    color: var(--el-text-color-secondary);
+    background: none;
+    border: 0;
+    cursor: pointer;
+}
+.vp-rtab.on {
+    color: var(--el-color-primary);
+    box-shadow: inset 0 -2px 0 var(--el-color-primary);
+}
+.vp-rail__body {
+    flex: 1;
+    min-height: 0;
+}
+
 .vp-console__rail,
 .vp-console__main {
     min-height: 0;

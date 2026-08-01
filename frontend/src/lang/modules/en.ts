@@ -750,6 +750,12 @@ const message = {
             agentAsks: 'Agent has a question',
             permOff: 'Permission broker inactive',
             permOffHint: 'Tool calls bypass panel confirmation; the agent executes directly.',
+            files: 'Files',
+            fileUp: 'Parent',
+            fileHome: 'Session directory',
+            fileMkdir: 'New folder',
+            fileUpload: 'Upload here',
+            fileEmpty: 'Empty directory',
             status: {
                 idle: 'Idle',
                 working: 'Working',

@@ -23,7 +23,7 @@
             :description="$t('aiTools.console.permOffHint')"
         />
 
-        <div class="vp-console">
+        <div class="vp-console" :style="{ gridTemplateColumns: railW + 'px 4px minmax(0, 1fr)' }">
         <div class="vp-console__rail">
             <div class="vp-rail__tabs">
                 <button class="vp-rtab" :class="{ on: tab === 'sessions' }" @click="tab = 'sessions'">
@@ -54,6 +54,9 @@
             />
         </div>
 
+            <div class="vp-handle v" title="拖动调整宽度 · 双击复位"
+                 @mousedown="startDrag('rail', $event)" @dblclick="railW = 232; persist()" />
+
         <div class="vp-console__main">
             <div v-if="!current" class="vp-console__blank">
                 <el-empty :image-size="72" :description="$t('aiTools.console.pickHint')" />
@@ -77,7 +80,8 @@
                         {{ $t('commons.button.conn') }}
                     </el-button>
                 </div>
-                <div class="vp-console__panes" :class="{ 'no-term': !showTerm }">
+                <div class="vp-console__panes" :class="{ 'no-term': !showTerm }"
+                     :style="showTerm ? { gridTemplateRows: `minmax(0,1fr) 4px ${termH}px` } : {}">
                     <Chat
                         :events="events"
                         :busy="currentSession?.status === 'working'"
@@ -89,6 +93,8 @@
                         @interrupt="interrupt"
                         @control="doControl"
                     />
+                    <div v-show="showTerm" class="vp-handle h" title="拖动调整高度 · 双击复位"
+                         @mousedown="startDrag('term', $event)" @dblclick="termH = 260; persist()" />
                     <div v-show="showTerm" class="vp-console__term">
                         <Terminal :key="`term-${current}-${connId}`" ref="terminalRef" />
                     </div>
@@ -147,6 +153,36 @@ const perm = ref<any>(null);
 const tab = ref<'sessions' | 'files'>('sessions');
 const historyRef = ref();
 const settingsRef = ref();
+
+// 分栏尺寸存 localStorage：刷新后保持是明确的验收项。
+// 存的是像素而不是百分比——百分比在换窗口尺寸时会漂。
+const railW = ref(Number(localStorage.getItem('vp.railW')) || 232);
+const termH = ref(Number(localStorage.getItem('vp.termH')) || 260);
+const persist = () => {
+    localStorage.setItem('vp.railW', String(railW.value));
+    localStorage.setItem('vp.termH', String(termH.value));
+};
+
+// 拖动时把监听挂在 window 上，不是分隔条上：
+// 指针跑得比重绘快时会离开那个 4px 的元素，挂在它身上会中途断掉。
+const startDrag = (which: 'rail' | 'term', ev: MouseEvent) => {
+    ev.preventDefault();
+    const x0 = ev.clientX, y0 = ev.clientY;
+    const w0 = railW.value, h0 = termH.value;
+    const move = (e: MouseEvent) => {
+        if (which === 'rail') railW.value = Math.min(480, Math.max(160, w0 + e.clientX - x0));
+        else termH.value = Math.min(900, Math.max(120, h0 - (e.clientY - y0)));
+    };
+    const up = () => {
+        window.removeEventListener('mousemove', move);
+        window.removeEventListener('mouseup', up);
+        persist();
+        // 终端要按新高度重算行列，否则 tput lines 还是旧值
+        window.dispatchEvent(new Event('resize'));
+    };
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+};
 
 const onHistoryOpened = async (id: string) => {
     await refresh();
@@ -365,7 +401,7 @@ onBeforeUnmount(() => {
     display: grid;
     /* minmax(0,1fr) 而不是 1fr：1fr 的最小尺寸是 auto，
        终端里一行长输出就会把整列撑破 */
-    grid-template-columns: 232px minmax(0, 1fr);
+    grid-template-columns: 232px 4px minmax(0, 1fr);
     /* 行也要显式约束：只写 columns 的话隐式行是 auto，会被内容撑开，
        整条 min-height:0 的链就断在这里 */
     grid-template-rows: minmax(0, 1fr);
@@ -442,6 +478,26 @@ onBeforeUnmount(() => {
 }
 .grow {
     flex: 1;
+}
+
+.vp-handle {
+    background: var(--el-border-color-lighter);
+    position: relative;
+}
+.vp-handle.v {
+    cursor: col-resize;
+}
+.vp-handle.h {
+    cursor: row-resize;
+}
+.vp-handle:hover {
+    background: var(--el-color-primary);
+}
+/* 4px 太细，指针不好瞄。用伪元素把命中区域撑到 11px，视觉仍是 4px */
+.vp-handle::after {
+    content: '';
+    position: absolute;
+    inset: -4px;
 }
 
 .vp-console__panes {

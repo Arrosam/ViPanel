@@ -1,5 +1,5 @@
 <template>
-    <div class="vp-chat">
+    <div class="vp-chat" :class="{ 'is-drop': dropping }" @dragover="onDragOver" @dragleave="dropping = false" @drop="onDrop">
         <div ref="scrollEl" class="vp-chat__body" @scroll="onScroll">
             <el-empty v-if="!events.length" :image-size="56" :description="$t('aiTools.console.chatEmpty')" />
 
@@ -136,6 +136,22 @@ const bang = computed(() => draft.value.startsWith('!'));
 
 const pickFile = () => fileEl.value?.click();
 
+// 从文件面板拖进来 = 变附件。拖的是路径不是内容——
+// agent 是本机进程，它自己能读，没必要把文件搬一趟。
+const dropping = ref(false);
+const onDragOver = (ev: DragEvent) => {
+    if (!ev.dataTransfer?.types.includes('application/x-vp-path')) return;
+    ev.preventDefault();
+    dropping.value = true;
+};
+const onDrop = (ev: DragEvent) => {
+    dropping.value = false;
+    const p = ev.dataTransfer?.getData('application/x-vp-path');
+    if (!p) return;
+    ev.preventDefault();
+    if (!attachments.value.includes(p)) attachments.value.push(p);
+};
+
 const onPick = async (e: Event) => {
     const input = e.target as HTMLInputElement;
     for (const f of Array.from(input.files || [])) {
@@ -218,6 +234,10 @@ const brief = (s: string) => {
 </script>
 
 <style lang="scss" scoped>
+.vp-chat.is-drop {
+    outline: 2px dashed var(--el-color-primary);
+    outline-offset: -4px;
+}
 .vp-chat {
     display: flex;
     flex-direction: column;

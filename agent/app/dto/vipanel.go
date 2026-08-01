@@ -22,6 +22,7 @@ type ViCaps struct {
 	Auth             bool     `json:"auth"`
 	Models           []string `json:"models"`
 	EffortLevels     []string `json:"effortLevels"`
+	Commands         any      `json:"commands"`
 }
 
 type ViHarnessItem struct {

@@ -9,12 +9,13 @@
             <el-empty v-if="!groups.length" :image-size="52" :description="$t('aiTools.console.empty')" />
 
             <template v-for="g in groups" :key="g.cwd">
-                <div class="vp-grp" :title="g.cwd">
+                <div class="vp-grp" :title="g.cwd" @click="toggle(g.cwd)">
+                    <el-icon class="vp-grp__ic" :class="{ off: collapsed.has(g.cwd) }"><CaretBottom /></el-icon>
                     <span class="vp-grp__nm">{{ g.dir }}</span>
                     <span class="vp-grp__n">{{ g.items.length }}</span>
                 </div>
                 <div
-                    v-for="s in g.items"
+                    v-for="s in (collapsed.has(g.cwd) ? [] : g.items)"
                     :key="s.id"
                     class="vp-row"
                     :class="{ 'is-on': s.id === current }"
@@ -58,9 +59,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { Plus, MoreFilled, Clock } from '@element-plus/icons-vue';
+import { Plus, MoreFilled, Clock, CaretBottom } from '@element-plus/icons-vue';
 import { ViPanel } from '@/api/interface/vipanel';
 
 const { t } = useI18n();
@@ -87,6 +88,15 @@ const groups = computed(() => {
     }
     return [...map.values()];
 });
+
+// 折叠状态存 localStorage：目录多了以后一屏放不下，
+// 每次刷新都重新展开等于没有这个功能
+const collapsed = ref(new Set<string>(JSON.parse(localStorage.getItem('vp.collapsed') || '[]')));
+const toggle = (cwd: string) => {
+    collapsed.value.has(cwd) ? collapsed.value.delete(cwd) : collapsed.value.add(cwd);
+    collapsed.value = new Set(collapsed.value);
+    localStorage.setItem('vp.collapsed', JSON.stringify([...collapsed.value]));
+};
 
 const statusText = (s: ViPanel.Session) => {
     const label = t(`aiTools.console.status.${s.status}`);
@@ -156,6 +166,7 @@ const statusText = (s: ViPanel.Session) => {
 }
 
 .vp-grp {
+    cursor: pointer;
     display: flex;
     align-items: center;
     gap: 6px;
@@ -164,6 +175,14 @@ const statusText = (s: ViPanel.Session) => {
     letter-spacing: 0.04em;
     text-transform: uppercase;
     color: var(--el-text-color-secondary);
+}
+.vp-grp__ic {
+    flex: none;
+    font-size: 10px;
+    transition: transform 0.15s;
+}
+.vp-grp__ic.off {
+    transform: rotate(-90deg);
 }
 .vp-grp__nm {
     overflow: hidden;

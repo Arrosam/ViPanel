@@ -32,6 +32,18 @@ func (claudeCode) Capabilities() Capabilities {
 		Auth:             true,
 		Models:           []string{"fable", "opus", "sonnet", "haiku"},
 		EffortLevels:     []string{"low", "medium", "high", "xhigh", "max"},
+		Commands: []Command{
+			{"/model", "切换模型"},
+			{"/effort", "切换推理强度"},
+			{"/clear", "清空当前对话"},
+			{"/compact", "压缩上下文"},
+			{"/status", "查看会话状态"},
+			{"/cost", "查看本次用量"},
+			{"/init", "生成 CLAUDE.md"},
+			{"/review", "代码审查"},
+			{"/theme", "切换主题"},
+			{"/help", "帮助"},
+		},
 	}
 }
 

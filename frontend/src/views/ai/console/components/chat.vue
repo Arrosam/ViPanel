@@ -170,6 +170,16 @@ const onPick = async (e: Event) => {
 // @ 补全：候选来自真实目录，不是猜的
 const onInput = async () => {
     const v = draft.value;
+
+    // 斜杠命令：候选来自 harness 的 Capabilities.Commands，不是前端写死的。
+    // 换一个 harness，这个列表就该跟着换。
+    if (v.startsWith('/') && !v.includes(' ')) {
+        const cmds = (props.caps?.commands || []) as { name: string; desc: string }[];
+        const hit = cmds.filter((c) => c.name.startsWith(v)).map((c) => `${c.name}  ${c.desc}`);
+        ac.value = { open: hit.length > 0, items: hit.slice(0, 10), idx: 0, from: 0 };
+        return;
+    }
+
     const at = v.lastIndexOf('@');
     if (at < 0 || /\s/.test(v.slice(at + 1))) return closeAc();
     const frag = v.slice(at + 1);
@@ -189,8 +199,13 @@ const onInput = async () => {
 
 const closeAc = () => (ac.value = { open: false, items: [], idx: 0, from: 0 });
 
-const pickAc = (name: string) => {
-    draft.value = draft.value.slice(0, ac.value.from) + '@' + name + ' ';
+const pickAc = (item: string) => {
+    // 斜杠命令的候选带着说明文字，取第一段才是命令本身
+    if (item.startsWith('/')) {
+        draft.value = item.split('  ')[0] + ' ';
+    } else {
+        draft.value = draft.value.slice(0, ac.value.from) + '@' + item + ' ';
+    }
     closeAc();
 };
 

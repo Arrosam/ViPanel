@@ -43,6 +43,14 @@ type Capabilities struct {
 	Auth             bool     `json:"auth"`             // 有没有自己的登录体系
 	Models           []string `json:"models"`
 	EffortLevels     []string `json:"effortLevels"`
+	// Commands 是这个 harness 支持的斜杠命令。由 harness **声明**，
+	// 不是前端硬编码——换一个 harness 命令列表就该跟着换。
+	Commands []Command `json:"commands"`
+}
+
+type Command struct {
+	Name string `json:"name"`
+	Desc string `json:"desc"`
 }
 
 type SpawnContext struct {

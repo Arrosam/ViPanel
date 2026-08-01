@@ -6,6 +6,7 @@ export namespace ViPanel {
         auth: boolean;
         models: string[];
         effortLevels: string[];
+        commands: { name: string; desc: string }[];
     }
 
     export interface Session {

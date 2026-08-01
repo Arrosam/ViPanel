@@ -16,6 +16,10 @@ func toCaps(c Capabilities) dto.ViCaps {
 	if efforts == nil {
 		efforts = []string{}
 	}
+	cmds := c.Commands
+	if cmds == nil {
+		cmds = []Command{}
+	}
 	return dto.ViCaps{
 		StructuredEvents: c.StructuredEvents,
 		Resume:           c.Resume,
@@ -23,6 +27,7 @@ func toCaps(c Capabilities) dto.ViCaps {
 		Auth:             c.Auth,
 		Models:           models,
 		EffortLevels:     efforts,
+		Commands:         cmds,
 	}
 }
 

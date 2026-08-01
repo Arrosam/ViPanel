@@ -3,6 +3,7 @@ package vipanel
 import (
 	"os"
 	"os/exec"
+	"strings"
 	"syscall"
 	"time"
 	"unsafe"
@@ -37,7 +38,20 @@ type PtySpec struct {
 func StartPty(spec PtySpec) (*Pty, error) {
 	cmd := exec.Command(spec.File, spec.Args...)
 
-	env := os.Environ()
+	// 剔除 CLAUDE_CODE_* 再继承环境。
+	//
+	// 关键的是 CLAUDE_CODE_CHILD_SESSION：claude 检测到自己是另一个 claude
+	// 会话的子进程时会**关掉 transcript 写入**，而 ViPanel 的整条聊天链路
+	// 完全建立在 transcript 上。生产环境里 agent 是 1panel-agent 的子进程
+	// 不会中招，但只要面板本身是从某个 claude 终端里起的（开发时很常见），
+	// 聊天区就会静默变空——终端里一切正常，看不出任何错误。
+	var env []string
+	for _, kv := range os.Environ() {
+		if strings.HasPrefix(kv, "CLAUDE_CODE_") {
+			continue
+		}
+		env = append(env, kv)
+	}
 	if os.Getenv("TERM") == "" {
 		env = append(env, "TERM=xterm-256color")
 	}

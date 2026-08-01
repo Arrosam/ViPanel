@@ -151,7 +151,9 @@ const pool = ref<ViPanel.Pool>({ size: 2, active: 0, order: [] });
 const current = ref('');
 const connId = ref(0);
 const terminalRef = ref();
-const showTerm = ref(true);
+// 终端默认关闭：控制台的主界面是聊天，终端是需要时才拉出来的东西。
+// 一进来就占掉半屏，既挤压聊天也让人以为它是主角。
+const showTerm = ref(localStorage.getItem('vp.showTerm') === '1');
 const loginRef = ref();
 const auth = ref<ViPanel.AuthState>({ supported: false, loggedIn: true, hookInstalled: true });
 const events = ref<any[]>([]);
@@ -241,7 +243,10 @@ const connect = () => {
     });
 };
 
-watch(showTerm, () => remount());
+watch(showTerm, (v) => {
+    localStorage.setItem('vp.showTerm', v ? '1' : '0');
+    remount();
+});
 
 // 换会话/重连都靠换 Terminal 的 key 整组件重挂载。
 // 上游 Terminal 的 closeRealTerminal 没有 token 校验，旧 socket 的 close 晚到时
@@ -408,6 +413,12 @@ onBeforeUnmount(() => {
     display: flex;
     flex-direction: column;
     gap: 8px;
+    /* 让整块撑满父容器而不是自己算高度。
+       原来写的是 calc(100vh - 120px)，那个 120 是拍脑袋定的——
+       顶栏、面包屑、页脚的实际高度一变，底下就空出一条。 */
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
 }
 .vp-console__banner {
     flex: none;
@@ -424,8 +435,8 @@ onBeforeUnmount(() => {
     /* 行也要显式约束：只写 columns 的话隐式行是 auto，会被内容撑开，
        整条 min-height:0 的链就断在这里 */
     grid-template-rows: minmax(0, 1fr);
-    height: calc(100vh - 120px);
-    min-height: 360px;
+    flex: 1;
+    min-height: 0;
     border: 1px solid var(--el-border-color-light);
     border-radius: 6px;
     overflow: hidden;

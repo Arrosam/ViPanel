@@ -29,3 +29,8 @@ export const agentLogout = () => http.post(`/ai/console/auth/logout`, {});
 
 export const resolvePermission = (id: string, decision: string, reason: string) =>
     http.post(`/ai/console/permission/resolve`, { id, decision, reason });
+
+export const listHistory = () => http.get<ViPanel.History[]>(`/ai/console/history`);
+
+export const openHistory = (id: string, cwd: string, title: string) =>
+    http.post<ViPanel.Session>(`/ai/console/history/open`, { id, cwd, title });

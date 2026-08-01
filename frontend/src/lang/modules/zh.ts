@@ -722,6 +722,8 @@ const message = {
             fileMkdir: '新建文件夹',
             fileUpload: '上传到当前目录',
             fileEmpty: '这个目录是空的',
+            history: '历史会话',
+            historyEmpty: '没有可重开的历史会话',
             status: {
                 idle: '空闲',
                 working: '处理中',

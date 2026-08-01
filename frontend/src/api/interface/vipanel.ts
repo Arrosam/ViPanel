@@ -36,6 +36,14 @@ export namespace ViPanel {
         plan?: string;
     }
 
+    export interface History {
+        id: string;
+        cwd: string;
+        title: string;
+        mtime: number;
+        size: number;
+    }
+
     export interface Pool {
         size: number;
         active: number;

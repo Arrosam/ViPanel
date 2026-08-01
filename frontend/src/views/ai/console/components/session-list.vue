@@ -46,6 +46,11 @@
             </template>
         </div>
 
+        <button class="vp-rail__hist" @click="emit('history')">
+            <el-icon><Clock /></el-icon>
+            {{ $t('aiTools.console.history') }}
+        </button>
+
         <div class="vp-rail__ft">
             {{ $t('aiTools.console.poolState', [pool.active, pool.size]) }}
         </div>
@@ -55,7 +60,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { Plus, MoreFilled } from '@element-plus/icons-vue';
+import { Plus, MoreFilled, Clock } from '@element-plus/icons-vue';
 import { ViPanel } from '@/api/interface/vipanel';
 
 const { t } = useI18n();
@@ -69,6 +74,7 @@ const props = defineProps<{
 const emit = defineEmits<{
     (e: 'select', id: string): void;
     (e: 'create'): void;
+    (e: 'history'): void;
     (e: 'rename' | 'restart' | 'remove', s: ViPanel.Session): void;
 }>();
 
@@ -117,6 +123,28 @@ const statusText = (s: ViPanel.Session) => {
     min-height: 0;
     overflow-y: auto;
     padding: 4px;
+}
+
+/* 历史会话放在列表**下面**：它开的是磁盘上的旧会话，
+   属于「翻到底还没找到」时的兜底动作，不该和新建挤在顶上 */
+.vp-rail__hist {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: 7px 12px;
+    font: 11px/1 inherit;
+    color: var(--el-text-color-secondary);
+    background: none;
+    border: 0;
+    border-top: 1px solid var(--el-border-color-lighter);
+    cursor: pointer;
+    text-align: left;
+}
+.vp-rail__hist:hover {
+    color: var(--el-text-color-primary);
+    background: var(--el-fill-color-light);
 }
 
 .vp-rail__ft {

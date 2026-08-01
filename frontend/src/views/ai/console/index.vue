@@ -44,6 +44,7 @@
                 @rename="doRename"
                 @restart="doRestart"
                 @remove="doRemove"
+                @history="historyRef?.show()"
             />
             <FilePanel
                 v-show="tab === 'files'"
@@ -92,6 +93,7 @@
         </div>
         <AgentLogin ref="loginRef" @done="loadAuth" />
         <Permission :req="perm" />
+        <History ref="historyRef" @opened="onHistoryOpened" />
     </div>
 </template>
 
@@ -105,6 +107,7 @@ import FilePanel from './components/file-panel.vue';
 import Chat from './components/chat.vue';
 import AgentLogin from './components/agent-login.vue';
 import Permission from './components/permission.vue';
+import History from './components/history.vue';
 import { ViPanel } from '@/api/interface/vipanel';
 import {
     activateSession,
@@ -133,6 +136,12 @@ const auth = ref<ViPanel.AuthState>({ supported: false, loggedIn: true, hookInst
 const events = ref<any[]>([]);
 const perm = ref<any>(null);
 const tab = ref<'sessions' | 'files'>('sessions');
+const historyRef = ref();
+
+const onHistoryOpened = async (id: string) => {
+    await refresh();
+    await select(id);
+};
 
 // 单引号包裹并转义内部单引号——文件名带空格或引号时，
 // 直接插裸路径会让用户回车后吃一个语法错误

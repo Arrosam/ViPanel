@@ -756,6 +756,8 @@ const message = {
             fileMkdir: 'New folder',
             fileUpload: 'Upload here',
             fileEmpty: 'Empty directory',
+            history: 'History',
+            historyEmpty: 'No reopenable sessions',
             status: {
                 idle: 'Idle',
                 working: 'Working',

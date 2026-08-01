@@ -72,6 +72,7 @@
                         :active-text="$t('aiTools.console.terminal')"
                         :inactive-text="$t('aiTools.console.terminal')"
                     />
+                    <el-button link :icon="Setting" :title="$t('aiTools.console.settings')" @click="settingsRef?.show()" />
                     <el-button plain size="small" @click="reconnect">
                         {{ $t('commons.button.conn') }}
                     </el-button>
@@ -94,6 +95,7 @@
         <AgentLogin ref="loginRef" @done="loadAuth" />
         <Permission :req="perm" />
         <History ref="historyRef" @opened="onHistoryOpened" />
+        <Settings ref="settingsRef" @changed="refresh(); loadAuth()" @login="loginRef?.open()" />
     </div>
 </template>
 
@@ -108,6 +110,8 @@ import Chat from './components/chat.vue';
 import AgentLogin from './components/agent-login.vue';
 import Permission from './components/permission.vue';
 import History from './components/history.vue';
+import Settings from './components/settings.vue';
+import { Setting } from '@element-plus/icons-vue';
 import { ViPanel } from '@/api/interface/vipanel';
 import {
     activateSession,
@@ -137,6 +141,7 @@ const events = ref<any[]>([]);
 const perm = ref<any>(null);
 const tab = ref<'sessions' | 'files'>('sessions');
 const historyRef = ref();
+const settingsRef = ref();
 
 const onHistoryOpened = async (id: string) => {
     await refresh();

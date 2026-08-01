@@ -732,6 +732,11 @@ const message = {
             attach: '添加附件',
             mode: '模式',
             model: '模型',
+            recycle: '回收站',
+            recycleEmpty: '回收站是空的',
+            restore: '恢復',
+            toRecycle: '移入回收站',
+            toRecycleHint: '不是永久刪除——會移到回收站，仍可恢復。',
             status: {
                 idle: '空閒',
                 working: '處理中',

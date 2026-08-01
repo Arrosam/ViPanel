@@ -762,6 +762,11 @@ const message = {
             attach: 'Attach',
             mode: 'Mode',
             model: 'Model',
+            recycle: 'Recycle bin',
+            recycleEmpty: 'Recycle bin is empty',
+            restore: 'Restore',
+            toRecycle: 'Move to recycle bin',
+            toRecycleHint: 'Not a permanent delete — it goes to the recycle bin and can be restored.',
             status: {
                 idle: 'Idle',
                 working: 'Working',

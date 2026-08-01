@@ -5,6 +5,8 @@
             <el-button link :icon="HomeFilled" :title="$t('aiTools.console.fileHome')" @click="go(props.cwd)" />
             <el-button link :icon="FolderAdd" :title="$t('aiTools.console.fileMkdir')" :disabled="!inScope" @click="mkdir" />
             <el-button link :icon="Upload" :title="$t('aiTools.console.fileUpload')" :disabled="!inScope" @click="pick" />
+            <div class="grow" />
+            <el-button link :icon="Delete" :title="$t('aiTools.console.recycle')" @click="openRecycle" />
             <input ref="fileInput" type="file" multiple hidden @change="upload" />
         </div>
 
@@ -39,17 +41,33 @@
                 <el-icon class="vp-file__ic"><Folder v-if="f.isDir" /><Document v-else /></el-icon>
                 <span class="vp-file__nm">{{ f.name }}</span>
                 <span v-if="!f.isDir" class="vp-file__sz">{{ fmtSize(f.size) }}</span>
+                <el-icon v-if="inScope" class="vp-file__x" :title="$t('aiTools.console.toRecycle')" @click.stop="trash(f)">
+                    <Delete />
+                </el-icon>
             </div>
             <el-empty v-if="!loading && !entries.length" :image-size="48" :description="$t('aiTools.console.fileEmpty')" />
         </div>
+
+        <el-dialog v-model="recycleOpen" :title="$t('aiTools.console.recycle')" width="620px">
+            <el-empty v-if="!recycle.length" :image-size="48" :description="$t('aiTools.console.recycleEmpty')" />
+            <div v-for="r in recycle" :key="r.rName" class="vp-rec">
+                <div class="vp-rec__l">
+                    <b>{{ r.name }}</b>
+                    <i>{{ r.sourcePath }}</i>
+                </div>
+                <el-button link type="primary" size="small" @click="restore(r)">
+                    {{ $t('aiTools.console.restore') }}
+                </el-button>
+            </div>
+        </el-dialog>
     </div>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { ElMessageBox } from 'element-plus';
-import { Top, HomeFilled, FolderAdd, Upload, Folder, Document } from '@element-plus/icons-vue';
-import { getFilesList, createFile, moveFile } from '@/api/modules/files';
+import { Top, HomeFilled, FolderAdd, Upload, Folder, Document, Delete } from '@element-plus/icons-vue';
+import { getFilesList, createFile, moveFile, deleteFile, getRecycleList, reduceFile } from '@/api/modules/files';
 import { MsgError } from '@/utils/message';
 import { useI18n } from 'vue-i18n';
 
@@ -150,6 +168,37 @@ const mkdir = async () => {
 };
 
 const pick = () => fileInput.value?.click();
+
+// 删除一律走回收站（forceDelete=false）。
+// 这个面板上的 agent 以 root 跑，一个没确认的永久删除是不可逆的。
+const recycleOpen = ref(false);
+const recycle = ref<any[]>([]);
+
+const trash = async (f: any) => {
+    try {
+        await ElMessageBox.confirm(t('aiTools.console.toRecycleHint'), `${t('aiTools.console.toRecycle')}：${f.name}`, { type: 'warning' });
+    } catch {
+        return;
+    }
+    await deleteFile({ path: f.path, isDir: f.isDir, forceDelete: false } as any);
+    await go(here.value);
+};
+
+const loadRecycle = async () => {
+    const res = await getRecycleList({ page: 1, pageSize: 100 } as any);
+    recycle.value = res.data?.items || [];
+};
+
+const openRecycle = async () => {
+    recycleOpen.value = true;
+    await loadRecycle();
+};
+
+const restore = async (r: any) => {
+    await reduceFile({ rName: r.rName, from: r.from, name: r.name } as any);
+    await loadRecycle();
+    await go(here.value);
+};
 
 const upload = async (e: Event) => {
     const input = e.target as HTMLInputElement;
@@ -276,6 +325,41 @@ const upload = async (e: Event) => {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+.vp-file__x {
+    flex: none;
+    opacity: 0;
+    color: var(--el-color-danger);
+}
+.vp-file:hover .vp-file__x {
+    opacity: 0.7;
+}
+.vp-file__x:hover {
+    opacity: 1;
+}
+.vp-rec {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 4px;
+    border-bottom: 1px solid var(--el-border-color-lighter);
+}
+.vp-rec__l {
+    flex: 1;
+    min-width: 0;
+}
+.vp-rec__l b {
+    font-size: 12px;
+}
+.vp-rec__l i {
+    display: block;
+    font: 10px/1.5 var(--el-font-family-mono, monospace);
+    font-style: normal;
+    color: var(--el-text-color-secondary);
+    word-break: break-all;
+}
+.grow {
+    flex: 1;
 }
 .vp-file__sz {
     flex: none;

@@ -738,7 +738,10 @@ const message = {
             toRecycle: '移入回收站',
             toRecycleHint: '不是永久刪除——會移到回收站，仍可恢復。',
             reconnectTerm: '重連終端',
-            reconnectTermHint: '會換掉當前 shell，正在跑的命令會中斷。聊天和 Agent 不受影響。',
+            reconnectTermHint: '會換掉當前 shell，正在跑的命令會中斷。聊天和 Agent 不受影响。',
+            newSessionHere: '在當前目錄新建會話',
+            createHere: '在此新建',
+            noSubdir: '這個目錄下沒有子目錄',
             status: {
                 idle: '空閒',
                 working: '處理中',

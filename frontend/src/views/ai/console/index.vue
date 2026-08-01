@@ -51,6 +51,7 @@
                 class="vp-rail__body"
                 :cwd="currentSession?.cwd || ''"
                 @insert="insertPath"
+                @new-session="(cwd) => dirPickerRef?.open(cwd)"
             />
         </div>
 
@@ -111,6 +112,7 @@
         <AgentLogin ref="loginRef" @done="loadAuth" />
         <Permission :req="perm" />
         <History ref="historyRef" @opened="onHistoryOpened" />
+        <DirPicker ref="dirPickerRef" @created="onHistoryOpened" />
         <Settings ref="settingsRef" @changed="refresh(); loadAuth()" @login="loginRef?.open()" />
     </div>
 </template>
@@ -126,6 +128,7 @@ import Chat from './components/chat.vue';
 import AgentLogin from './components/agent-login.vue';
 import Permission from './components/permission.vue';
 import History from './components/history.vue';
+import DirPicker from './components/dir-picker.vue';
 import Settings from './components/settings.vue';
 import { Setting, Refresh } from '@element-plus/icons-vue';
 import { ViPanel } from '@/api/interface/vipanel';
@@ -160,6 +163,7 @@ const events = ref<any[]>([]);
 const perm = ref<any>(null);
 const tab = ref<'sessions' | 'files'>('sessions');
 const historyRef = ref();
+const dirPickerRef = ref();
 const settingsRef = ref();
 
 // 分栏尺寸存 localStorage：刷新后保持是明确的验收项。
@@ -335,23 +339,13 @@ const interrupt = () => {
     if (evWS?.readyState === 1) evWS.send(JSON.stringify({ type: 'interrupt' }));
 };
 
-const openCreate = async () => {
-    try {
-        const { value } = await ElMessageBox.prompt(
-            t('aiTools.console.cwdPlaceholder'),
-            t('aiTools.console.newSession'),
-            { inputValue: '', inputPlaceholder: '/root' },
-        );
-        const cwd = (value || '').trim();
-        if (!cwd) return;
-        const res = await createSession({ cwd });
-        await refresh();
-        await select(res.data.id);
-        MsgSuccess(t('aiTools.console.newSession'));
-    } catch {
-        /* 取消 */
-    }
-};
+// 新建会话走目录选择器，不是让用户手打路径。
+// 手打意味着要么记得住绝对路径，要么先去别处查一遍——
+// 而这个面板本来就有文件浏览能力，没理由不用。
+//
+// 起始目录：从会话页打开就落在当前会话的 cwd，
+// 从文件页打开就落在正在浏览的那个目录。
+const openCreate = () => dirPickerRef.value?.open(currentSession.value?.cwd || '/');
 
 const doRename = async (s: ViPanel.Session) => {
     try {

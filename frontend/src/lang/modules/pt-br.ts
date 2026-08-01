@@ -771,6 +771,9 @@ const message = {
             toRecycleHint: 'Not a permanent delete — it goes to the recycle bin and can be restored.',
             reconnectTerm: 'Reconnect terminal',
             reconnectTermHint: 'Replaces the current shell; running commands are killed. Chat and the agent are unaffected.',
+            newSessionHere: 'New session here',
+            createHere: 'Create here',
+            noSubdir: 'No subdirectories',
             status: {
                 idle: 'Idle',
                 working: 'Working',

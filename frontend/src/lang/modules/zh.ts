@@ -742,6 +742,9 @@ const message = {
             toRecycleHint: '不是永久删除——会移到回收站，仍可恢复。',
             reconnectTerm: '重连终端',
             reconnectTermHint: '会换掉当前 shell，正在跑的命令会中断。聊天和 Agent 不受影响。',
+            newSessionHere: '在当前目录新建会话',
+            createHere: '在此新建',
+            noSubdir: '这个目录下没有子目录',
             status: {
                 idle: '空闲',
                 working: '处理中',

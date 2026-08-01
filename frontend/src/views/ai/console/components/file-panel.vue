@@ -5,6 +5,12 @@
             <el-button link :icon="HomeFilled" :title="$t('aiTools.console.fileHome')" @click="go(props.cwd)" />
             <el-button link :icon="FolderAdd" :title="$t('aiTools.console.fileMkdir')" :disabled="!inScope" @click="mkdir" />
             <el-button link :icon="Upload" :title="$t('aiTools.console.fileUpload')" :disabled="!inScope" @click="pick" />
+            <el-button
+                link
+                :icon="Plus"
+                :title="$t('aiTools.console.newSessionHere')"
+                @click="emit('newSession', here)"
+            />
             <div class="grow" />
             <el-button link :icon="Delete" :title="$t('aiTools.console.recycle')" @click="openRecycle" />
             <input ref="fileInput" type="file" multiple hidden @change="upload" />
@@ -66,14 +72,18 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { ElMessageBox } from 'element-plus';
-import { Top, HomeFilled, FolderAdd, Upload, Folder, Document, Delete } from '@element-plus/icons-vue';
+import { Top, HomeFilled, FolderAdd, Upload, Folder, Document, Delete, Plus } from '@element-plus/icons-vue';
 import { getFilesList, createFile, moveFile, deleteFile, getRecycleList, reduceFile } from '@/api/modules/files';
 import { MsgError } from '@/utils/message';
 import { useI18n } from 'vue-i18n';
 
 const { t } = useI18n();
 const props = defineProps<{ cwd: string }>();
-const emit = defineEmits<{ (e: 'insert', path: string): void; (e: 'attach', path: string): void }>();
+const emit = defineEmits<{
+    (e: 'insert', path: string): void;
+    (e: 'attach', path: string): void;
+    (e: 'newSession', cwd: string): void;
+}>();
 
 const here = ref('');
 const entries = ref<any[]>([]);

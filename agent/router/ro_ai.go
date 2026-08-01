@@ -31,6 +31,8 @@ func (a *AIToolsRouter) InitRouter(Router *gin.RouterGroup) {
 		aiToolsRouter.GET("/console/auth/status", baseApi.GetViAuthStatus)
 		aiToolsRouter.POST("/console/auth/logout", baseApi.ViAuthLogout)
 		aiToolsRouter.GET("/console/auth/login", baseApi.WsViAuthLogin)
+		aiToolsRouter.POST("/console/hook/decide", baseApi.ViHookDecide)
+		aiToolsRouter.POST("/console/permission/resolve", baseApi.ViPermissionResolve)
 
 		aiToolsRouter.POST("/ollama/close", baseApi.CloseOllamaModel)
 		aiToolsRouter.POST("/ollama/model", baseApi.CreateOllamaModel)

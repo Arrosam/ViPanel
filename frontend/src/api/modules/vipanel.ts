@@ -26,3 +26,6 @@ export const updatePool = (size: number) => http.post<ViPanel.Pool>(`/ai/console
 export const getAgentAuth = () => http.get<ViPanel.AuthState>(`/ai/console/auth/status`);
 
 export const agentLogout = () => http.post(`/ai/console/auth/logout`, {});
+
+export const resolvePermission = (id: string, decision: string, reason: string) =>
+    http.post(`/ai/console/permission/resolve`, { id, decision, reason });

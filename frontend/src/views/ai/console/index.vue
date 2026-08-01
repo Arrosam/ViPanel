@@ -13,6 +13,16 @@
             </el-button>
         </el-alert>
 
+        <el-alert
+            v-if="auth.hookInstalled === false"
+            class="vp-console__banner"
+            type="error"
+            :closable="false"
+            show-icon
+            :title="$t('aiTools.console.permOff')"
+            :description="$t('aiTools.console.permOffHint')"
+        />
+
         <div class="vp-console">
         <SessionList
             class="vp-console__rail"
@@ -64,6 +74,7 @@
         </div>
         </div>
         <AgentLogin ref="loginRef" @done="loadAuth" />
+        <Permission :req="perm" />
     </div>
 </template>
 
@@ -75,6 +86,7 @@ import Terminal from '@/components/terminal/index.vue';
 import SessionList from './components/session-list.vue';
 import Chat from './components/chat.vue';
 import AgentLogin from './components/agent-login.vue';
+import Permission from './components/permission.vue';
 import { ViPanel } from '@/api/interface/vipanel';
 import {
     activateSession,
@@ -99,8 +111,9 @@ const connId = ref(0);
 const terminalRef = ref();
 const showTerm = ref(true);
 const loginRef = ref();
-const auth = ref<ViPanel.AuthState>({ supported: false, loggedIn: true });
+const auth = ref<ViPanel.AuthState>({ supported: false, loggedIn: true, hookInstalled: true });
 const events = ref<any[]>([]);
+const perm = ref<any>(null);
 let poller: ReturnType<typeof setInterval> | undefined;
 let evWS: WebSocket | undefined;
 let evToken = 0;
@@ -174,6 +187,7 @@ const connectEvents = (id: string) => {
         /* 已断开 */
     }
     events.value = [];
+    perm.value = null;
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
     const ws = new WebSocket(`${proto}://${location.host}/api/v2/ai/console/events?id=${id}`);
     evWS = ws;
@@ -182,7 +196,11 @@ const connectEvents = (id: string) => {
         const msg = JSON.parse(ev.data);
         if (msg.type === 'history') events.value = msg.events || [];
         else if (msg.type === 'events') events.value.push(...(msg.events || []));
-        else if (msg.type === 'error') MsgError(msg.message);
+        else if (msg.type === 'permission_request') perm.value = msg.request;
+        else if (msg.type === 'permission_resolved') {
+            // 别的设备先点了，这边的弹窗要立刻收起，不能让人做第二次决定
+            if (perm.value?.id === msg.id) perm.value = null;
+        } else if (msg.type === 'error') MsgError(msg.message);
     };
 };
 

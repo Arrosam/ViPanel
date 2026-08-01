@@ -193,9 +193,11 @@ func AuthStatus(harnessID string) AuthState {
 	if !ok {
 		// 没有登录体系的 harness 归一成「不支持但可用」，
 		// 下游就不必到处判空——demo 阶段第一天就是漏判这里炸的。
-		return AuthState{Supported: false, LoggedIn: true}
+		return AuthState{Supported: false, LoggedIn: true, HookInstalled: HookInstalled()}
 	}
-	return a.AuthStatus()
+	st := a.AuthStatus()
+	st.HookInstalled = HookInstalled()
+	return st
 }
 
 func AuthLogout(harnessID string) error {

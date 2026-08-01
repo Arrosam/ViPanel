@@ -12,6 +12,7 @@ import (
 	"github.com/1Panel-dev/1Panel/agent/app/service/vipanel"
 	"github.com/1Panel-dev/1Panel/agent/global"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
 )
@@ -233,6 +234,13 @@ func (b *BaseApi) WsConsoleEvents(c *gin.Context) {
 	if err := send(gin.H{"type": "history", "events": hist}); err != nil {
 		return
 	}
+	// 补发这个会话上还没被决定的权限请求：
+	// 新设备接上来时不该漏掉一个正在等人的确认
+	for _, p := range vipanel.Broker().PendingFor(id) {
+		if err := send(gin.H{"type": "permission_request", "request": p}); err != nil {
+			return
+		}
+	}
 
 	done := make(chan struct{})
 	go func() {
@@ -275,6 +283,13 @@ func (b *BaseApi) WsConsoleEvents(c *gin.Context) {
 				return
 			}
 			if err := send(gin.H{"type": "events", "events": evs}); err != nil {
+				return
+			}
+		case msg, ok := <-sub.Raw():
+			if !ok {
+				return
+			}
+			if err := send(msg); err != nil {
 				return
 			}
 		}
@@ -458,4 +473,39 @@ func (b *BaseApi) WsConsoleAgent(c *gin.Context) {
 			}
 		}
 	}
+}
+
+// @Tags ViPanel
+// @Summary PreToolUse hook 的决定入口（仅本机 unix socket）
+// @Router /ai/console/hook/decide [post]
+func (b *BaseApi) ViHookDecide(c *gin.Context) {
+	var req vipanel.PermRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		helper.BadRequest(c, err)
+		return
+	}
+	req.ID = uuid.NewString()
+	// 这里会阻塞到有人决定或超时。hook 那边是同步等着的。
+	c.JSON(200, vipanel.Broker().Ask(req))
+}
+
+// @Tags ViPanel
+// @Summary 浏览器提交权限决定
+// @Router /ai/console/permission/resolve [post]
+func (b *BaseApi) ViPermissionResolve(c *gin.Context) {
+	var req struct {
+		ID       string `json:"id"`
+		Decision string `json:"decision"`
+		Reason   string `json:"reason"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		helper.BadRequest(c, err)
+		return
+	}
+	ok := vipanel.Broker().Resolve(req.ID, vipanel.Verdict{
+		Decision: vipanel.Decision(req.Decision), Reason: req.Reason,
+	})
+	// ok=false 表示这个请求已经被别的设备决定过了。这不是错误——
+	// 多设备同时看着时本来就该是「谁先点算谁」。
+	helper.SuccessWithData(c, gin.H{"applied": ok})
 }

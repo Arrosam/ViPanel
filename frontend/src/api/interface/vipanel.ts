@@ -29,6 +29,7 @@ export namespace ViPanel {
 
     export interface AuthState {
         supported: boolean;
+        hookInstalled: boolean;
         loggedIn: boolean;
         authMethod?: string;
         email?: string;

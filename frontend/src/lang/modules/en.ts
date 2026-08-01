@@ -743,6 +743,13 @@ const message = {
             logout: 'Sign out',
             agentScreen: 'Agent screen',
             paneNone: 'Chat only',
+            permTitle: 'Permission request',
+            permAllow: 'Allow',
+            permDeny: 'Deny',
+            permAsk: 'Back to terminal',
+            agentAsks: 'Agent has a question',
+            permOff: 'Permission broker inactive',
+            permOffHint: 'Tool calls bypass panel confirmation; the agent executes directly.',
             status: {
                 idle: 'Idle',
                 working: 'Working',

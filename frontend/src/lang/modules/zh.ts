@@ -709,6 +709,13 @@ const message = {
             logout: '登出',
             agentScreen: 'Agent 屏幕',
             paneNone: '仅聊天',
+            permTitle: '权限请求',
+            permAllow: '允许',
+            permDeny: '拒绝',
+            permAsk: '退回终端',
+            agentAsks: 'Agent 有个问题',
+            permOff: '权限代理未生效',
+            permOffHint: '工具调用不会经过面板确认，agent 会直接以当前权限执行。',
             status: {
                 idle: '空闲',
                 working: '处理中',

@@ -8,7 +8,8 @@ import (
 
 // 会话的事件订阅。一个会话可以同时被多台设备看着。
 type subscriber struct {
-	ch chan []Event
+	ch  chan []Event
+	raw chan map[string]any // 事件之外的消息（权限请求等）
 }
 
 type stream struct {
@@ -102,7 +103,7 @@ func (s *Session) Subscribe() ([]Event, *subscriber) {
 
 	st.mu.Lock()
 	defer st.mu.Unlock()
-	sub := &subscriber{ch: make(chan []Event, 64)}
+	sub := &subscriber{ch: make(chan []Event, 64), raw: make(chan map[string]any, 32)}
 	st.subs[sub] = struct{}{}
 	hist := make([]Event, len(st.hist))
 	copy(hist, st.hist)
@@ -115,6 +116,7 @@ func (s *Session) Unsubscribe(sub *subscriber) {
 	delete(st.subs, sub)
 	st.mu.Unlock()
 	close(sub.ch)
+	close(sub.raw)
 }
 
 // MarkRead 用户看过了，熄灯。
@@ -179,7 +181,8 @@ func (s *Session) stopStream() {
 	}
 }
 
-func (s *subscriber) Ch() <-chan []Event { return s.ch }
+func (s *subscriber) Ch() <-chan []Event         { return s.ch }
+func (s *subscriber) Raw() <-chan map[string]any { return s.raw }
 
 // waitTranscript 等 transcript 文件出现。
 //
@@ -231,4 +234,31 @@ func (s *Session) waitTranscript() {
 	st.mu.Lock()
 	st.waiting = false
 	st.mu.Unlock()
+}
+
+// 权限请求也走事件流：它在概念上就是对话的一部分，
+// 单开一条通道只会让前端多维护一个连接和一套重连逻辑。
+func (s *Session) broadcastPermission(req PermRequest) {
+	s.fanout(map[string]any{"type": "permission_request", "request": req})
+}
+
+func (s *Session) broadcastPermissionResolved(id string, d Decision) {
+	s.fanout(map[string]any{"type": "permission_resolved", "id": id, "decision": d})
+}
+
+// fanout 把一条任意消息推给所有订阅者。
+func (s *Session) fanout(msg map[string]any) {
+	st := s.stream
+	st.mu.Lock()
+	subs := make([]*subscriber, 0, len(st.subs))
+	for sub := range st.subs {
+		subs = append(subs, sub)
+	}
+	st.mu.Unlock()
+	for _, sub := range subs {
+		select {
+		case sub.raw <- msg:
+		default:
+		}
+	}
 }

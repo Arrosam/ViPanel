@@ -42,6 +42,7 @@ func (claudeCode) Spawn(ctx SpawnContext) PtySpec {
 	// 起进程前先把首次运行向导标记掉，否则会话会卡在向导里，
 	// 而向导只存在于 agent 屏幕上，transcript 里一个字都没有
 	ensureOnboarded(ctx.Cwd)
+	ensureHook()
 
 	args := []string{"--session-id", ctx.SessionID}
 	if ctx.Resume {
@@ -392,4 +393,78 @@ func claudeVersion() string {
 		return ""
 	}
 	return f[0]
+}
+
+// hookPath 是权限代理可执行体的位置。与 agent 二进制同目录。
+func hookPath() string {
+	self, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	p := filepath.Join(filepath.Dir(self), "vipanel-hook")
+	if st, err := os.Stat(p); err != nil || st.Mode()&0o111 == 0 {
+		return "" // 不存在或不可执行
+	}
+	return p
+}
+
+// HookInstalled 供界面判断要不要标出「权限代理未生效」。
+func HookInstalled() bool { return hookPath() != "" }
+
+// ensureHook 把 PreToolUse 钩子写进 claude 的用户级 settings.json。
+//
+// 用 matcher "*" 拦下**所有**工具：这个面板没有沙箱兜底，
+// 白名单式的部分拦截等于给自己留一堆想不到的口子。
+// AskUserQuestion 也在其中——它同样走这条通道（见 ROADMAP P1）。
+//
+// 找不到 hook 可执行体时**主动把配置摘掉**，而不是留一条指向不存在文件的
+// 命令：后者会让 claude 每次调工具都报一次钩子执行失败。
+func ensureHook() {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+	dir := filepath.Join(home, ".claude")
+	path := filepath.Join(dir, "settings.json")
+
+	cfg := map[string]any{}
+	if raw, err := os.ReadFile(path); err == nil {
+		if json.Unmarshal(raw, &cfg) != nil {
+			return // 解析不了就别动，写坏用户的配置比不写糟得多
+		}
+	}
+
+	hooks, _ := cfg["hooks"].(map[string]any)
+	if hooks == nil {
+		hooks = map[string]any{}
+	}
+
+	bin := hookPath()
+	if bin == "" {
+		if _, ok := hooks["PreToolUse"]; !ok {
+			return
+		}
+		delete(hooks, "PreToolUse")
+	} else {
+		want := []any{map[string]any{
+			"matcher": "*",
+			"hooks":   []any{map[string]any{"type": "command", "command": bin}},
+		}}
+		if same(hooks["PreToolUse"], want) {
+			return
+		}
+		hooks["PreToolUse"] = want
+	}
+	cfg["hooks"] = hooks
+
+	if raw, err := json.MarshalIndent(cfg, "", "  "); err == nil {
+		_ = os.MkdirAll(dir, 0o700)
+		_ = os.WriteFile(path, raw, 0o600)
+	}
+}
+
+func same(a, b any) bool {
+	x, err1 := json.Marshal(a)
+	y, err2 := json.Marshal(b)
+	return err1 == nil && err2 == nil && string(x) == string(y)
 }

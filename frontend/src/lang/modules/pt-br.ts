@@ -769,6 +769,8 @@ const message = {
             restore: 'Restore',
             toRecycle: 'Move to recycle bin',
             toRecycleHint: 'Not a permanent delete — it goes to the recycle bin and can be restored.',
+            reconnectTerm: 'Reconnect terminal',
+            reconnectTermHint: 'Replaces the current shell; running commands are killed. Chat and the agent are unaffected.',
             status: {
                 idle: 'Idle',
                 working: 'Working',

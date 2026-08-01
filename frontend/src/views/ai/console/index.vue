@@ -76,9 +76,15 @@
                         :inactive-text="$t('aiTools.console.terminal')"
                     />
                     <el-button link :icon="Setting" :title="$t('aiTools.console.settings')" @click="settingsRef?.show()" />
-                    <el-button plain size="small" @click="reconnect">
-                        {{ $t('commons.button.conn') }}
-                    </el-button>
+                    <!-- 只作用于终端，且是破坏性的（当前 shell 会被换掉），
+                         所以文案要说清对象、图标要传达「重来」而不是「接上」 -->
+                    <el-button
+                        v-show="showTerm"
+                        link
+                        :icon="Refresh"
+                        :title="$t('aiTools.console.reconnectTerm')"
+                        @click="reconnect"
+                    />
                 </div>
                 <div class="vp-console__panes" :class="{ 'no-term': !showTerm }"
                      :style="showTerm ? { gridTemplateRows: `minmax(0,1fr) 4px ${termH}px` } : {}">
@@ -121,7 +127,7 @@ import AgentLogin from './components/agent-login.vue';
 import Permission from './components/permission.vue';
 import History from './components/history.vue';
 import Settings from './components/settings.vue';
-import { Setting } from '@element-plus/icons-vue';
+import { Setting, Refresh } from '@element-plus/icons-vue';
 import { ViPanel } from '@/api/interface/vipanel';
 import {
     activateSession,
@@ -259,7 +265,20 @@ const select = async (id: string) => {
     await remount();
 };
 
-const reconnect = () => remount();
+// 重连会换掉当前 shell——跑着的东西会没，所以先问一句。
+// 聊天与 agent 走的是另一条流，完全不受影响。
+const reconnect = async () => {
+    try {
+        await ElMessageBox.confirm(
+            t('aiTools.console.reconnectTermHint'),
+            t('aiTools.console.reconnectTerm'),
+            { type: 'warning' },
+        );
+    } catch {
+        return;
+    }
+    remount();
+};
 
 // 事件流：先收一次 history 全量渲染，之后增量追加。
 // 两者分开是必要的——混在一起前端分不清哪些该一次性铺开、哪些该滚动追加。

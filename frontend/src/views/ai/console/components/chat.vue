@@ -404,6 +404,15 @@ const brief = (s: string) => {
     flex: 1;
 }
 
+/* md-editor-v3 的 preview 自带主题背景色，铺在气泡背景之上，
+   于是文字底下会浮出一块和气泡不同色的矩形。
+   这里它只是个渲染器，背景该由外层的气泡决定。 */
+:deep(.md-editor),
+:deep(.md-editor-preview-wrapper),
+:deep(.md-editor-preview) {
+    background: transparent;
+    color: inherit;
+}
 :deep(.md-editor-preview-wrapper) {
     padding: 0;
 }

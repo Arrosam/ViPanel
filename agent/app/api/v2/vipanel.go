@@ -509,3 +509,28 @@ func (b *BaseApi) ViPermissionResolve(c *gin.Context) {
 	// 多设备同时看着时本来就该是「谁先点算谁」。
 	helper.SuccessWithData(c, gin.H{"applied": ok})
 }
+
+// @Tags ViPanel
+// @Summary 调整会话的运行时行为（模式 / 模型 / effort）
+// @Router /ai/console/sessions/control [post]
+func (b *BaseApi) ControlViSession(c *gin.Context) {
+	var req struct {
+		ID    string `json:"id"`
+		Kind  string `json:"kind"`
+		Value string `json:"value"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		helper.BadRequest(c, err)
+		return
+	}
+	s, ok := vipanel.M().Get(req.ID)
+	if !ok {
+		helper.BadRequest(c, errors.New("会话不存在"))
+		return
+	}
+	if err := s.Control(req.Kind, req.Value); err != nil {
+		helper.BadRequest(c, err)
+		return
+	}
+	helper.Success(c)
+}

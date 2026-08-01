@@ -732,6 +732,9 @@ const message = {
             capTermOnly: '仅终端',
             save: '保存',
             saved: '已保存',
+            attach: '添加附件',
+            mode: '模式',
+            model: '模型',
             status: {
                 idle: '空闲',
                 working: '处理中',

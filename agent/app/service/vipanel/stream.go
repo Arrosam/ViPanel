@@ -262,3 +262,39 @@ func (s *Session) fanout(msg map[string]any) {
 		}
 	}
 }
+
+// Control 调整会话的运行时行为（模式 / 模型 / effort）。
+func (s *Session) Control(kind, value string) error {
+	c, ok := s.Harness.(Controller)
+	if !ok {
+		return errNotSupported
+	}
+	p := s.pty_()
+	if p == nil || !p.Alive() {
+		return errNoAgent
+	}
+	w := func(b []byte) { _, _ = p.Write(b) }
+	switch kind {
+	case "mode":
+		c.CycleMode(w)
+	case "model":
+		c.SetModel(w, value)
+	case "effort":
+		c.SetEffort(w, value)
+	default:
+		return errNotSupported
+	}
+	s.mu.Lock()
+	s.touch()
+	s.mu.Unlock()
+	return nil
+}
+
+// Mode 返回 agent 屏幕上读到的当前模式。
+func (s *Session) Mode() string {
+	c, ok := s.Harness.(Controller)
+	if !ok {
+		return ""
+	}
+	return c.ReadMode(s.Snapshot())
+}

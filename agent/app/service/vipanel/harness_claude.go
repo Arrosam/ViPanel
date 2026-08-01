@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -467,4 +468,53 @@ func same(a, b any) bool {
 	x, err1 := json.Marshal(a)
 	y, err2 := json.Marshal(b)
 	return err1 == nil && err2 == nil && string(x) == string(y)
+}
+
+// -- 运行中调整 -------------------------------------------------------------
+
+// CycleMode 就是 Shift+Tab。TUI 用它循环 auto / manual / plan。
+func (claudeCode) CycleMode(write func([]byte)) { write([]byte("\x1b[Z")) }
+
+func (c claudeCode) SetModel(write func([]byte), v string)  { c.slash(write, "/model "+v) }
+func (c claudeCode) SetEffort(write func([]byte), v string) { c.slash(write, "/effort "+v) }
+
+// slash 发一条斜杠命令。和普通消息一样，正文与回车必须拆开写。
+func (claudeCode) slash(write func([]byte), cmd string) {
+	write([]byte(cmd))
+	time.Sleep(200 * time.Millisecond)
+	write([]byte("\r"))
+}
+
+// modeLine 匹配底栏的模式指示。TUI 在不同版本里写法不一样，
+// 所以三种都认，而不是死抠某一种。
+// 底栏的三种写法都认，而不是死抠某一种：
+//
+//	⏸ manual mode on · ...
+//	⏵⏵ accept edits on (shift+tab to cycle)
+//	⏸ plan mode on
+var modeLine = regexp.MustCompile(`(?i)(auto|manual|plan|bypass)\s+mode\s+on|(accept edits)\s+on`)
+
+// ReadMode 从屏幕字节里读当前模式。
+//
+// 之所以读屏幕而不是记一个本地变量：用户完全可以在终端里自己按 Shift+Tab，
+// 那时面板记的值就错了。屏幕是唯一的事实来源。
+func (claudeCode) ReadMode(screen []byte) string {
+	clean := csiPattern.ReplaceAll(screen, nil)
+	// 只看最后 4KB：底栏总在最新的输出里，全量扫会撞上历史里的同类字样
+	if len(clean) > 4096 {
+		clean = clean[len(clean)-4096:]
+	}
+	// 取**最后一个**匹配，不是第一个。
+	// 窗口里混着历史输出，正着扫会抓到早先那次的模式；
+	// 底栏是屏幕上最新的东西，只有最后一条才是当前值。
+	ms := modeLine.FindAllSubmatch(clean, -1)
+	if len(ms) == 0 {
+		return ""
+	}
+	for _, g := range ms[len(ms)-1][1:] {
+		if len(g) > 0 {
+			return strings.ToLower(string(g))
+		}
+	}
+	return ""
 }

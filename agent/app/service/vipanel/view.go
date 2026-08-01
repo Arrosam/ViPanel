@@ -41,6 +41,7 @@ func ToItem(s *Session) dto.ViSessionItem {
 		Alive:        s.Alive(),
 		LastUsed:     s.LastUsed(),
 		Notes:        s.Notes(),
+		Mode:         s.Mode(),
 		Capabilities: toCaps(s.Harness.Capabilities()),
 	}
 }

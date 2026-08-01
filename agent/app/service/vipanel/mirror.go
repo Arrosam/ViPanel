@@ -113,3 +113,10 @@ func (s *Session) pumpAgent(p *Pty) {
 		}
 	}
 }
+
+// Snapshot 返回屏幕缓冲的副本，供读取模式等用途。
+func (s *Session) Snapshot() []byte {
+	s.screen.mu.Lock()
+	defer s.screen.mu.Unlock()
+	return append([]byte(nil), s.screen.buf...)
+}

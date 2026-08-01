@@ -31,17 +31,69 @@
         </div>
 
         <div class="vp-chat__composer">
-            <el-input
-                v-model="draft"
-                type="textarea"
-                :rows="2"
-                resize="none"
-                :placeholder="$t('aiTools.console.inputHint')"
-                @keydown.enter.exact.prevent="send"
-            />
+            <div v-if="attachments.length" class="vp-chips">
+                <span v-for="(a, i) in attachments" :key="a" class="vp-chip">
+                    {{ a.split('/').pop() }}
+                    <el-icon class="vp-chip__x" @click="attachments.splice(i, 1)"><Close /></el-icon>
+                </span>
+            </div>
+
+            <div class="vp-input">
+                <span v-if="bang" class="vp-bang">bash</span>
+                <el-input
+                    v-model="draft"
+                    type="textarea"
+                    :rows="2"
+                    resize="none"
+                    :placeholder="$t('aiTools.console.inputHint')"
+                    @input="onInput"
+                    @keydown.enter.exact.prevent="send"
+                    @keydown.esc="closeAc"
+                />
+                <div v-if="ac.open && ac.items.length" class="vp-ac">
+                    <div
+                        v-for="(it, i) in ac.items"
+                        :key="it"
+                        class="vp-ac__i"
+                        :class="{ on: i === ac.idx }"
+                        @mousedown.prevent="pickAc(it)"
+                    >
+                        {{ it }}
+                    </div>
+                </div>
+            </div>
             <div class="vp-chat__acts">
+                <el-button link :icon="Paperclip" :title="$t('aiTools.console.attach')" @click="pickFile" />
+                <input ref="fileEl" type="file" multiple hidden @change="onPick" />
+
+                <el-button v-if="caps.interrupt" link size="small" @click="emit('control', 'mode', '')">
+                    {{ mode || $t('aiTools.console.mode') }}
+                </el-button>
+
                 <span v-if="busy" class="vp-chat__busy">{{ $t('aiTools.console.status.working') }}</span>
                 <div class="grow" />
+
+                <!-- 模型与 effort 由 harness 的能力表决定有没有，不是写死的 -->
+                <el-select
+                    v-if="caps.models?.length"
+                    class="vp-sel"
+                    :model-value="''"
+                    size="small"
+                    :placeholder="$t('aiTools.console.model')"
+                    @change="(v) => emit('control', 'model', v)"
+                >
+                    <el-option v-for="m in caps.models" :key="m" :value="m" :label="m" />
+                </el-select>
+                <el-select
+                    v-if="caps.effortLevels?.length"
+                    class="vp-sel"
+                    :model-value="''"
+                    size="small"
+                    placeholder="effort"
+                    @change="(v) => emit('control', 'effort', v)"
+                >
+                    <el-option v-for="e in caps.effortLevels" :key="e" :value="e" :label="e" />
+                </el-select>
                 <el-button v-if="busy && canInterrupt" plain size="small" @click="emit('interrupt')">
                     {{ $t('aiTools.console.stop') }}
                 </el-button>
@@ -54,7 +106,8 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
+import { Close, Paperclip } from '@element-plus/icons-vue';
 import { MdPreview } from 'md-editor-v3';
 import 'md-editor-v3/lib/preview.css';
 
@@ -62,12 +115,68 @@ const props = defineProps<{
     events: any[];
     busy: boolean;
     canInterrupt: boolean;
+    caps: any;
+    mode: string;
+    cwd: string;
 }>();
 
 const emit = defineEmits<{
-    (e: 'send', text: string): void;
+    (e: 'send', text: string, attachments: string[]): void;
     (e: 'interrupt'): void;
+    (e: 'control', kind: string, value: string): void;
 }>();
+
+const attachments = ref<string[]>([]);
+const fileEl = ref<HTMLInputElement | null>(null);
+const ac = ref<{ open: boolean; items: string[]; idx: number; from: number }>({ open: false, items: [], idx: 0, from: 0 });
+
+// 行首的 ! 切 bash 模式。指示器必须可见——否则用户不知道这一行
+// 会被当成 shell 命令执行，那是个能造成实际后果的误解。
+const bang = computed(() => draft.value.startsWith('!'));
+
+const pickFile = () => fileEl.value?.click();
+
+const onPick = async (e: Event) => {
+    const input = e.target as HTMLInputElement;
+    for (const f of Array.from(input.files || [])) {
+        // 附件先落到会话目录，再把路径交给 agent——
+        // agent 是本机进程，给它路径比给它内容更自然
+        const fd = new FormData();
+        fd.append('file', f);
+        fd.append('path', props.cwd);
+        const csrf = document.cookie.split('; ').find((c) => c.startsWith('pcsrftoken='))?.split('=')[1];
+        await fetch('/api/v2/files/upload', { method: 'POST', body: fd, headers: csrf ? { 'X-CSRF-Token': csrf } : {} });
+        attachments.value.push(`${props.cwd}/${f.name}`);
+    }
+    input.value = '';
+};
+
+// @ 补全：候选来自真实目录，不是猜的
+const onInput = async () => {
+    const v = draft.value;
+    const at = v.lastIndexOf('@');
+    if (at < 0 || /\s/.test(v.slice(at + 1))) return closeAc();
+    const frag = v.slice(at + 1);
+    try {
+        const csrf = document.cookie.split('; ').find((c) => c.startsWith('pcsrftoken='))?.split('=')[1];
+        const res = await fetch('/api/v2/files/search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...(csrf ? { 'X-CSRF-Token': csrf } : {}) },
+            body: JSON.stringify({ path: props.cwd, expand: true, page: 1, pageSize: 200, showHidden: false }),
+        }).then((r) => r.json());
+        const names = (res?.data?.items || []).map((i: any) => i.name).filter((n: string) => n.toLowerCase().startsWith(frag.toLowerCase()));
+        ac.value = { open: names.length > 0, items: names.slice(0, 8), idx: 0, from: at };
+    } catch {
+        closeAc();
+    }
+};
+
+const closeAc = () => (ac.value = { open: false, items: [], idx: 0, from: 0 });
+
+const pickAc = (name: string) => {
+    draft.value = draft.value.slice(0, ac.value.from) + '@' + name + ' ';
+    closeAc();
+};
 
 const draft = ref('');
 const scrollEl = ref<HTMLDivElement | null>(null);
@@ -94,9 +203,11 @@ watch(
 
 const send = () => {
     const t = draft.value.trim();
-    if (!t) return;
-    emit('send', t);
+    if (!t && !attachments.value.length) return;
+    emit('send', t, [...attachments.value]);
     draft.value = '';
+    attachments.value = [];
+    closeAc();
 };
 
 const brief = (s: string) => {
@@ -174,6 +285,69 @@ const brief = (s: string) => {
 }
 .vp-tool--res.bad {
     color: var(--el-color-danger);
+}
+
+.vp-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    padding-bottom: 6px;
+}
+.vp-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: var(--el-fill-color);
+    font: 11px/1.6 var(--el-font-family-mono, monospace);
+}
+.vp-chip__x {
+    cursor: pointer;
+    opacity: 0.6;
+}
+.vp-chip__x:hover {
+    opacity: 1;
+}
+
+.vp-input {
+    position: relative;
+}
+.vp-bang {
+    position: absolute;
+    top: 6px;
+    left: 8px;
+    z-index: 2;
+    padding: 0 5px;
+    border-radius: 3px;
+    background: var(--el-color-warning);
+    color: #fff;
+    font: 600 10px/1.6 var(--el-font-family-mono, monospace);
+}
+.vp-ac {
+    position: absolute;
+    left: 0;
+    bottom: 100%;
+    z-index: 10;
+    min-width: 220px;
+    max-height: 200px;
+    overflow-y: auto;
+    background: var(--el-bg-color-overlay);
+    border: 1px solid var(--el-border-color-light);
+    border-radius: 6px;
+    box-shadow: var(--el-box-shadow-light);
+}
+.vp-ac__i {
+    padding: 5px 10px;
+    font: 11px/1.5 var(--el-font-family-mono, monospace);
+    cursor: pointer;
+}
+.vp-ac__i.on,
+.vp-ac__i:hover {
+    background: var(--el-fill-color-light);
+}
+.vp-sel {
+    width: 92px;
 }
 
 .vp-chat__composer {

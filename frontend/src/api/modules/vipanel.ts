@@ -34,3 +34,6 @@ export const listHistory = () => http.get<ViPanel.History[]>(`/ai/console/histor
 
 export const openHistory = (id: string, cwd: string, title: string) =>
     http.post<ViPanel.Session>(`/ai/console/history/open`, { id, cwd, title });
+
+export const controlSession = (id: string, kind: string, value: string) =>
+    http.post(`/ai/console/sessions/control`, { id, kind, value });

@@ -10,6 +10,7 @@ type ViSessionItem struct {
 	Alive        bool     `json:"alive"`
 	LastUsed     int64    `json:"lastUsed"`
 	Notes        string   `json:"notes"`
+	Mode         string   `json:"mode"`
 	Capabilities ViCaps   `json:"capabilities"`
 	_            struct{} `json:"-"`
 }

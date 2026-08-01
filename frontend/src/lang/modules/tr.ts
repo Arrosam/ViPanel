@@ -763,6 +763,9 @@ const message = {
             capTermOnly: 'Terminal only',
             save: 'Save',
             saved: 'Saved',
+            attach: 'Attach',
+            mode: 'Mode',
+            model: 'Model',
             status: {
                 idle: 'Idle',
                 working: 'Working',

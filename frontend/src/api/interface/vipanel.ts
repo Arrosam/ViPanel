@@ -18,6 +18,7 @@ export namespace ViPanel {
         alive: boolean;
         lastUsed: number;
         notes: string;
+        mode: string;
         capabilities: Caps;
     }
 

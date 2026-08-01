@@ -82,8 +82,12 @@
                         :events="events"
                         :busy="currentSession?.status === 'working'"
                         :can-interrupt="!!currentSession?.capabilities.interrupt"
+                        :caps="currentSession?.capabilities || {}"
+                        :mode="currentSession?.mode || ''"
+                        :cwd="currentSession?.cwd || ''"
                         @send="sendMessage"
                         @interrupt="interrupt"
+                        @control="doControl"
                     />
                     <div v-show="showTerm" class="vp-console__term">
                         <Terminal :key="`term-${current}-${connId}`" ref="terminalRef" />
@@ -122,6 +126,7 @@ import {
     renameSession,
     restartSession,
     getAgentAuth,
+    controlSession,
 } from '@/api/modules/vipanel';
 import { MsgError, MsgSuccess } from '@/utils/message';
 
@@ -247,8 +252,23 @@ const connectEvents = (id: string) => {
     };
 };
 
-const sendMessage = (text: string) => {
-    if (evWS?.readyState === 1) evWS.send(JSON.stringify({ type: 'message', text }));
+const sendMessage = (text: string, attachments: string[] = []) => {
+    if (evWS?.readyState !== 1) return;
+    // 附件以 @路径 的形式并进正文：agent 是本机进程，
+    // 给它路径比给它内容更自然，也不必额外发明一套协议
+    const refs = attachments.map((p) => `@${p}`).join(' ');
+    const full = refs ? `${refs}\n${text}` : text;
+    evWS.send(JSON.stringify({ type: 'message', text: full }));
+};
+
+const doControl = async (kind: string, value: string) => {
+    if (!current.value) return;
+    try {
+        await controlSession(current.value, kind, value);
+        setTimeout(refresh, 1200); // 底栏要等 TUI 重绘才读得到新值
+    } catch (e: any) {
+        MsgError(e?.message || String(e));
+    }
 };
 
 const interrupt = () => {

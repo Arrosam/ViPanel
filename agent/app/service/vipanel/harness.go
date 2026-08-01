@@ -115,3 +115,14 @@ type Authenticator interface {
 	LoginSpec(mode string) PtySpec
 	Logout() error
 }
+
+// Controller 由「能在运行中调整行为」的 harness 实现。
+// 和 Discoverer / Authenticator 一样是可选接口。
+type Controller interface {
+	// CycleMode 循环切换执行模式。
+	CycleMode(write func([]byte))
+	SetModel(write func([]byte), v string)
+	SetEffort(write func([]byte), v string)
+	// ReadMode 从 agent 屏幕的原始字节里读当前模式，读不出返回空串。
+	ReadMode(screen []byte) string
+}

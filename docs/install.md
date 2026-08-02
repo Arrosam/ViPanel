@@ -22,6 +22,7 @@ mkdir -p build
 cd core  && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -o ../build/1panel-core  ./cmd/server
 cd agent && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -o ../build/1panel-agent ./cmd/server
 cd agent && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -o ../build/vipanel-hook ./cmd/hook
+cd agent && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -o ../build/vipanel-mcp ./cmd/mcp
 ```
 
 `GOARCH` 按目标机器改（x86_64 用 `amd64`）。
@@ -68,7 +69,7 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:9999/
 
 ```bash
 systemctl stop vipanel-core vipanel-agent
-# 覆盖 /usr/local/bin/{1panel-core,1panel-agent,vipanel-hook}
+# 覆盖 /usr/local/bin/{1panel-core,1panel-agent,vipanel-hook,vipanel-mcp}
 systemctl start vipanel-agent vipanel-core
 ```
 
@@ -77,6 +78,10 @@ systemctl start vipanel-agent vipanel-core
 ## 常见问题
 
 **页面一直转圈** — 前端用了 `development` 模式构建，见上面。
+
+**设置里「面板操作能力」灰着点不动** — `/usr/local/bin/vipanel-mcp` 不存在或没有
+执行权限。它必须和 `1panel-agent` 同目录：面板按自己二进制的所在目录去找它。
+没有它，agent 仍能正常对话和操作这台机器，只是不能操作面板本身。
 
 **控制台顶部红色「权限代理未生效」** — `/usr/local/bin/vipanel-hook` 不存在或没有
 执行位。这时工具调用不经过面板确认，agent 会直接以当前权限执行。

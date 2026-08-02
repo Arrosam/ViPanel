@@ -234,8 +234,11 @@ func audit(req PermRequest, op *mcp.Op, decision, note string) {
 	}
 
 	err := global.CoreDB.Exec(
-		`INSERT INTO operation_logs (created_at, updated_at, source, user, ip, path, method, status, message, detail_zh, detail_en)
-		 VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+		// 列名一律加反引号：user 在不少 SQL 方言里是保留字，
+		// 裸写在这里能跑，换个后端就未必。
+		"INSERT INTO `operation_logs` "+
+			"(`created_at`,`updated_at`,`source`,`user`,`ip`,`path`,`method`,`status`,`message`,`detail_zh`,`detail_en`) "+
+			"VALUES (?,?,?,?,?,?,?,?,?,?,?)",
 		time.Now(), time.Now(), "ViPanel MCP", "ViPanel Agent · "+title, "local",
 		op.Path, op.Method, status, note, zh, op.DescEN,
 	).Error

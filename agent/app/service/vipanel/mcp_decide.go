@@ -54,7 +54,11 @@ func DecideMCP(req PermRequest) (Verdict, bool) {
 	// 而 hook 那侧的 HTTP 超时只有 150 秒——首次使用某个板块时很容易直接超时降级。
 	// 合成一张也更贴「在请求特定功能的时候弹窗」：人要判断的本来就是
 	// 「要不要让它干这件事」，板块是这件事的上下文，不是另一个问题。
-	firstUse := !mcp.Gate().ModuleAuthorized(req.SessionID, op.Module)
+	// 常驻工具（那四个最高频只读）**绕过**板块授权，这是有意的：
+	// 它们存在的意义就是「不用先申请就能看一眼这台机器上有什么」。
+	// 代价是开局的侦察能力，收益是省掉大量「为了看一眼先弹一次窗」。
+	// 所以它们只有四个，而且必须是只读的（catalog_test 里有断言）。
+	firstUse := !op.Resident && !mcp.Gate().ModuleAuthorized(req.SessionID, op.Module)
 
 	allow := func(reason string) (Verdict, bool) {
 		if firstUse {

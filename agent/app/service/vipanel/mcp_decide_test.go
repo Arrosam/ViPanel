@@ -108,3 +108,31 @@ func TestMCPNeverDegradesToAsk(t *testing.T) {
 		t.Error("DecideMCP 必须显式处理 DecideAsk（超时/退回终端），不能让它落到默认分支")
 	}
 }
+
+// 常驻工具绕过板块授权，直接放行，不弹卡片。
+// 这条要是破了，开局那四个「看一眼」的工具每个都要先弹一次窗。
+func TestResidentReadIsAllowedWithoutModuleAuth(t *testing.T) {
+	var resident *mcp.Op
+	for i := range mcp.Catalog {
+		if mcp.Catalog[i].Resident {
+			resident = &mcp.Catalog[i]
+			break
+		}
+	}
+	if resident == nil {
+		t.Skip("目录里没有常驻工具")
+	}
+	mcp.Gate().Forget("res-test")
+	v, handled := DecideMCP(PermRequest{
+		SessionID: "res-test",
+		Tool:      mcp.ToolPrefix + resident.Name,
+		Input:     json.RawMessage(`{}`),
+	})
+	if !handled || v.Decision != DecideAllow {
+		t.Fatalf("常驻只读工具应当直接放行，得到 handled=%v decision=%v", handled, v.Decision)
+	}
+	// 而且不能顺带把整个板块授权掉——它只是自己免检
+	if mcp.Gate().ModuleAuthorized("res-test", resident.Module) {
+		t.Error("常驻工具不该顺带授权整个板块")
+	}
+}

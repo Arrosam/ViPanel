@@ -1,0 +1,1121 @@
+# ViPanel MCP 工具目录的**唯一人工评审面**。
+#
+# 规矩（MCP.md §5）：
+#   - swagger 里的每个端点，要么在 ops 里被收录，要么在 excluded 里被显式排除，
+#     否则 CI 报错。上游 rebase 后新加的端点默认是**关**的，必须有人看过才开。
+#   - 板块标 status: pending 时，该板块下未分类的端点只警告不报错，方便分批铺开。
+#     标 done 之后就是硬门槛。
+#   - risk 只有 read / write / destructive 三档，它决定的是「转述给人时打扰得多重」，
+#     不是第二套策略引擎。
+#   - fixed 用来把 /containers/operate 这种多路复用端点拆成一个动作一个工具。
+#     不拆的话「重启容器」和「删除容器」会共用同一个风险档。
+#
+# 改完跑：go run ./cmd/mcpgen -root ..
+
+modules:
+  - key: app
+    title: 应用
+    desc: 应用商店/已装应用
+    status: done
+  - key: website
+    title: 网站
+    desc: 网站/域名/nginx/PHP
+    status: done
+  - key: cert
+    title: 证书
+    desc: SSL证书/ACME/CA/DNS账号
+    status: done
+  - key: container
+    title: 容器
+    desc: 容器/镜像/网络/卷/compose
+    status: done
+  - key: database
+    title: 数据库
+    desc: MySQL/PG/Mongo/Redis
+    status: pending
+  - key: cron
+    title: 计划任务
+    desc: 计划任务/脚本库
+    status: pending
+  - key: backup
+    title: 备份
+    desc: 备份账号/快照
+    status: pending
+  - key: firewall
+    title: 防火墙
+    desc: 防火墙/端口/IP
+    status: pending
+  - key: ssh
+    title: SSH
+    desc: SSH配置/会话
+    status: pending
+  - key: system
+    title: 系统
+    desc: 磁盘/进程/设备
+    status: pending
+  - key: runtime
+    title: 运行环境
+    desc: PHP/Node/Java/Go/Python 环境
+    status: pending
+  - key: monitor
+    title: 监控
+    desc: 仪表盘/告警/日志
+    status: pending
+  - key: toolbox
+    title: 工具箱
+    desc: clam/fail2ban/FTP/supervisor
+    status: pending
+  - key: setting
+    title: 面板设置
+    desc: 面板设置/用户
+    status: pending
+  - key: ai
+    title: AI
+    desc: ollama/GPU/模型账号/agents
+    status: pending
+
+# --- 显式排除 ---------------------------------------------------------------
+# /ai/console/** 不需要写在这里，生成器无条件丢弃它（提权洞，MCP.md §1.1）。
+excluded:
+  - prefix: /files
+    reason: agent 自带 Read/Write/Bash，面板文件接口没有一条是它够不着的（MCP.md §1.2）
+
+  - prefix: /auth
+    reason: 登录/登出/2FA 校验，agent 没有理由碰
+
+  - prefix: /core/
+    reason: core 侧接口，agent socket 上够不着
+
+  - prefix: /containers/files/
+    reason: 容器内文件读写，agent 用 docker exec 更直接，且没有 25k 输出上限
+
+  - paths:
+      - /process/ws
+      - /websites/exec/composer
+    reason: 长连接/流式端点，不适合 MCP 的请求-响应模型
+
+  - paths:
+      - /health/check
+    reason: 面板自检，对 agent 无意义
+
+  - paths:
+      - /apps/icon/:key
+      - /containers/download/log
+      - /websites/ca/download
+      - /websites/ssl/download
+    reason: 返回二进制/文件流，塞进对话没有意义
+
+  - paths:
+      - /apps/detail/node/:appKey/:version
+      - /websites/ssl/push
+      - /websites/ssl/import
+    reason: 多节点分发，属于上游商业版范围（MCP.md §7）
+
+  - paths:
+      - /apps/installed/sort/update
+    reason: 纯 UI 排序，不改变任何实际状态
+
+  - paths:
+      - /websites/ssl/upload/file
+    reason: multipart 上传，MCP 传不了文件；证书内容走 /websites/ssl/upload
+
+# --- 收录的 op --------------------------------------------------------------
+ops:
+  # ========================= app =========================
+  - op: app.list
+    path: /apps/installed/list
+    module: app
+    risk: read
+    resident: true
+    desc: {zh: 列出已安装的应用, en: List installed apps}
+  - op: app.installed_search
+    path: /apps/installed/search
+    module: app
+    risk: read
+    desc: {zh: 分页查询已安装应用，可按名称/类型过滤, en: Page installed apps}
+    fields: [id, name, appKey, version, status, httpPort, httpsPort, path]
+  - op: app.store_search
+    path: /apps/search
+    module: app
+    risk: read
+    desc: {zh: 搜索应用商店，可按名称/分类/推荐过滤, en: Search app store}
+    fields: [key, name, shortDescZh, type, status, installed, tags, versions]
+  - op: app.store_get
+    path: /apps/:key
+    module: app
+    risk: read
+    desc: {zh: 按 key 查应用商店里的一个应用, en: Get store app by key}
+  - op: app.store_detail
+    path: /apps/details/:id
+    module: app
+    risk: read
+    desc: {zh: 按 id 查应用详情, en: Get app detail by id}
+  - op: app.store_version
+    path: /apps/detail/:appId/:version/:type
+    module: app
+    risk: read
+    desc: {zh: 查某个应用某个版本的详情，安装前需要它给出 appDetailId, en: Get app version detail}
+  - op: app.store_services
+    path: /apps/services/:key
+    module: app
+    risk: read
+    desc: {zh: 查某类应用可用的服务实例（建站选数据库时用）, en: List app services by key}
+  - op: app.store_tags
+    path: /apps/tags
+    module: app
+    risk: read
+    desc: {zh: 列出应用商店的分类标签, en: List app tags}
+  - op: app.store_check_update
+    path: /apps/checkupdate
+    module: app
+    risk: read
+    desc: {zh: 检查应用商店是否有更新, en: Check app store update}
+  - op: app.store_sync_local
+    path: /apps/sync/local
+    module: app
+    risk: write
+    desc: {zh: 同步本地应用商店列表, en: Sync local app list}
+  - op: app.store_sync_remote
+    path: /apps/sync/remote
+    module: app
+    risk: write
+    desc: {zh: 从远端同步应用商店列表, en: Sync remote app list}
+  - op: app.install
+    path: /apps/install
+    module: app
+    risk: write
+    desc: {zh: 安装应用。异步执行，返回后用 vipanel_task 查进度, en: Install app}
+  - op: app.info
+    path: /apps/installed/info/:appInstallId
+    module: app
+    risk: read
+    desc: {zh: 查已安装应用的基本信息, en: Get installed app info}
+  - op: app.installed_check
+    path: /apps/installed/check
+    module: app
+    risk: read
+    desc: {zh: 检查某个应用是否已安装, en: Check app installed}
+  - op: app.params
+    path: /apps/installed/params/:appInstallId
+    module: app
+    risk: read
+    desc: {zh: 查已安装应用的可配置参数, en: Get installed app params}
+  - op: app.params_update
+    path: /apps/installed/params/update
+    module: app
+    risk: write
+    desc: {zh: 修改已安装应用的参数，会重建容器, en: Update app params}
+  - op: app.default_conf
+    path: /apps/installed/conf
+    module: app
+    risk: read
+    desc: {zh: 查某类应用的默认配置文件内容, en: Get app default config}
+  - op: app.conninfo
+    path: /apps/installed/conninfo
+    module: app
+    risk: write
+    desc: {zh: 查应用的连接信息，**包含密码**。因为会吐出凭据，故按变更类对待、每次都要人确认, en: Get app connection info (contains password)}
+    noAlways: true
+  - op: app.loadport
+    path: /apps/installed/loadport
+    module: app
+    risk: read
+    desc: {zh: 查某类应用当前占用的端口, en: Get app port}
+  - op: app.config_update
+    path: /apps/installed/config/update
+    module: app
+    risk: write
+    desc: {zh: 修改已安装应用的配置文件, en: Update app config file}
+  - op: app.port_change
+    path: /apps/installed/port/change
+    module: app
+    risk: write
+    desc: {zh: 修改已安装应用对外暴露的端口, en: Change app port}
+  - op: app.sync_installed
+    path: /apps/installed/sync
+    module: app
+    risk: write
+    desc: {zh: 同步已安装应用的实际运行状态, en: Sync installed app status}
+  - op: app.upgrade_versions
+    path: /apps/installed/update/versions
+    module: app
+    risk: read
+    desc: {zh: 查某个已安装应用可升级到的版本, en: List upgradable versions}
+  - op: app.delete_check
+    path: /apps/installed/delete/check/:appInstallId
+    module: app
+    risk: read
+    desc: {zh: 删除前检查，列出会被一并影响的资源, en: Check before delete}
+  - op: app.ignore_upgrade
+    path: /apps/installed/ignore
+    module: app
+    risk: write
+    desc: {zh: 忽略某个应用的升级提示, en: Ignore app upgrade}
+  - op: app.ignore_cancel
+    path: /apps/ignored/cancel
+    module: app
+    risk: write
+    desc: {zh: 取消忽略某个应用的升级提示, en: Cancel ignore app upgrade}
+  - op: app.ignored_list
+    path: /apps/ignored/detail
+    module: app
+    risk: read
+    desc: {zh: 列出被忽略升级的应用, en: List ignored apps}
+
+  # /apps/installed/op 是多路复用端点，AppOperate 里含 delete。
+  # 拆成一个动作一个工具，否则「重启应用」和「删除应用」共用同一个风险档。
+  - op: app.start
+    path: /apps/installed/op
+    module: app
+    risk: write
+    fixed: {operate: start}
+    desc: {zh: 启动已安装的应用, en: Start installed app}
+  - op: app.stop
+    path: /apps/installed/op
+    module: app
+    risk: write
+    fixed: {operate: stop}
+    desc: {zh: 停止已安装的应用, en: Stop installed app}
+  - op: app.restart
+    path: /apps/installed/op
+    module: app
+    risk: write
+    fixed: {operate: restart}
+    desc: {zh: 重启已安装的应用, en: Restart installed app}
+  - op: app.rebuild
+    path: /apps/installed/op
+    module: app
+    risk: write
+    fixed: {operate: rebuild}
+    desc: {zh: 重建应用容器（参数改动后生效）, en: Rebuild app container}
+  - op: app.upgrade
+    path: /apps/installed/op
+    module: app
+    risk: write
+    fixed: {operate: upgrade}
+    desc: {zh: 升级应用到指定版本。异步执行，用 vipanel_task 查进度, en: Upgrade app}
+  - op: app.backup
+    path: /apps/installed/op
+    module: app
+    risk: write
+    fixed: {operate: backup}
+    desc: {zh: 备份应用, en: Backup app}
+  - op: app.delete
+    path: /apps/installed/op
+    module: app
+    risk: destructive
+    fixed: {operate: delete}
+    desc: {zh: 卸载应用。可选一并删除数据库、备份和镜像，不可恢复, en: Uninstall app}
+    noAlways: true
+
+  # ========================= website =========================
+  - op: website.list
+    path: /websites/list
+    module: website
+    risk: read
+    resident: true
+    desc: {zh: 列出全部网站, en: List websites}
+  - op: website.search
+    path: /websites/search
+    module: website
+    risk: read
+    desc: {zh: 分页查询网站，可按域名/分组过滤, en: Page websites}
+    fields: [id, primaryDomain, alias, type, status, expireDate, runtimeName]
+  - op: website.get
+    path: /websites/:id
+    module: website
+    risk: read
+    desc: {zh: 按 id 查一个网站的详情, en: Get website by id}
+  - op: website.options
+    path: /websites/options
+    module: website
+    risk: read
+    desc: {zh: 列出网站名称选项, en: List website names}
+  - op: website.create
+    path: /websites
+    module: website
+    risk: write
+    desc: {zh: 创建网站, en: Create website}
+  - op: website.create_check
+    path: /websites/check
+    module: website
+    risk: read
+    desc: {zh: 建站前检查依赖（nginx 是否装好等）, en: Check before create website}
+  - op: website.update
+    path: /websites/update
+    module: website
+    risk: write
+    desc: {zh: 更新网站基本设置, en: Update website}
+  - op: website.delete
+    path: /websites/del
+    module: website
+    risk: destructive
+    desc: {zh: 删除网站。可选一并删除关联应用、数据库和备份，不可恢复, en: Delete website}
+    noAlways: true
+  - op: website.start
+    path: /websites/operate
+    module: website
+    risk: write
+    fixed: {operate: start}
+    desc: {zh: 启用网站, en: Start website}
+  - op: website.stop
+    path: /websites/operate
+    module: website
+    risk: write
+    fixed: {operate: stop}
+    desc: {zh: 停用网站, en: Stop website}
+  - op: website.batch_operate
+    path: /websites/batch/operate
+    module: website
+    risk: write
+    desc: {zh: 批量启停网站, en: Batch operate websites}
+  - op: website.batch_group
+    path: /websites/batch/group
+    module: website
+    risk: write
+    desc: {zh: 批量设置网站分组, en: Batch set website group}
+  - op: website.batch_ssl
+    path: /websites/batch/ssl
+    module: website
+    risk: write
+    desc: {zh: 批量为网站配置 HTTPS, en: Batch set HTTPS}
+  - op: website.group_change
+    path: /websites/group/change
+    module: website
+    risk: write
+    desc: {zh: 把一个分组下的网站迁移到另一个分组, en: Change website group}
+  - op: website.https_update
+    path: /websites/:id/https
+    module: website
+    risk: write
+    desc: {zh: 更新网站的 HTTPS 配置, en: Update website https config}
+  - op: website.nginx_get
+    path: /websites/:id/config/:type
+    module: website
+    risk: read
+    desc: {zh: 按类型读网站的 nginx 配置段, en: Get website nginx config by type}
+  - op: website.nginx_conf_get
+    path: /websites/config
+    module: website
+    risk: read
+    desc: {zh: 读网站 nginx 配置, en: Load nginx conf}
+  - op: website.nginx_conf_update
+    path: /websites/config/update
+    module: website
+    risk: write
+    desc: {zh: 修改网站 nginx 配置, en: Update nginx conf}
+  - op: website.nginx_update
+    path: /websites/nginx/update
+    module: website
+    risk: write
+    desc: {zh: 直接覆写网站的 nginx 配置文件, en: Update website nginx conf file}
+  - op: website.php_version
+    path: /websites/php/version
+    module: website
+    risk: write
+    desc: {zh: 切换网站的 PHP 版本, en: Update php version}
+  - op: website.dir_get
+    path: /websites/dir
+    module: website
+    risk: read
+    desc: {zh: 查网站根目录, en: Get website dir}
+  - op: website.dir_update
+    path: /websites/dir/update
+    module: website
+    risk: write
+    desc: {zh: 修改网站根目录, en: Update website dir}
+  - op: website.dir_permission
+    path: /websites/dir/permission
+    module: website
+    risk: write
+    desc: {zh: 修改网站目录的属主与权限, en: Update website dir permission}
+  - op: website.database_change
+    path: /websites/databases
+    module: website
+    risk: write
+    desc: {zh: 更换网站绑定的数据库, en: Change website database}
+  - op: website.domain_list
+    path: /websites/domains/:websiteId
+    module: website
+    risk: read
+    desc: {zh: 列出网站绑定的域名, en: List website domains}
+  - op: website.domain_create
+    path: /websites/domains
+    module: website
+    risk: write
+    desc: {zh: 给网站添加域名, en: Create website domain}
+  - op: website.domain_update
+    path: /websites/domains/update
+    module: website
+    risk: write
+    desc: {zh: 修改网站域名, en: Update website domain}
+  - op: website.domain_delete
+    path: /websites/domains/del
+    module: website
+    risk: destructive
+    desc: {zh: 删除网站域名, en: Delete website domain}
+  - op: website.default_server
+    path: /websites/default/server
+    module: website
+    risk: write
+    desc: {zh: 设置默认站点, en: Change default server}
+  - op: website.default_html_get
+    path: /websites/default/html/:type
+    module: website
+    risk: read
+    desc: {zh: 读默认页面（404/index 等）, en: Get default html}
+  - op: website.default_html_update
+    path: /websites/default/html/update
+    module: website
+    risk: write
+    desc: {zh: 修改默认页面, en: Update default html}
+  - op: website.proxy_get
+    path: /websites/proxies
+    module: website
+    risk: read
+    desc: {zh: 读网站的反向代理配置, en: Get proxy conf}
+  - op: website.proxy_update
+    path: /websites/proxies/update
+    module: website
+    risk: write
+    desc: {zh: 新增或修改反向代理配置, en: Update proxy conf}
+  - op: website.proxy_file_update
+    path: /websites/proxies/file
+    module: website
+    risk: write
+    desc: {zh: 直接覆写反向代理配置文件, en: Update proxy config file}
+  - op: website.proxy_status
+    path: /websites/proxies/status
+    module: website
+    risk: write
+    desc: {zh: 启用或停用某条反向代理配置, en: Toggle proxy config status}
+  - op: website.proxy_delete
+    path: /websites/proxies/delete
+    module: website
+    risk: destructive
+    desc: {zh: 删除一条反向代理配置, en: Delete proxy config}
+  - op: website.proxy_cache_get
+    path: /websites/proxy/config/{id}
+    module: website
+    risk: read
+    desc: {zh: 读代理缓存配置, en: Get proxy cache config}
+  - op: website.proxy_cache_update
+    path: /websites/proxy/config
+    module: website
+    risk: write
+    desc: {zh: 修改代理缓存配置, en: Update proxy cache config}
+  - op: website.proxy_cache_clear
+    path: /websites/proxy/clear
+    module: website
+    risk: write
+    desc: {zh: 清理 OpenResty 代理缓存, en: Clear proxy cache}
+  - op: website.rewrite_get
+    path: /websites/rewrite
+    module: website
+    risk: read
+    desc: {zh: 读伪静态配置, en: Get rewrite conf}
+  - op: website.rewrite_update
+    path: /websites/rewrite/update
+    module: website
+    risk: write
+    desc: {zh: 修改伪静态配置, en: Update rewrite conf}
+  - op: website.rewrite_custom
+    path: /websites/rewrite/custom
+    module: website
+    risk: write
+    desc: {zh: 增删自定义伪静态规则, en: Operate custom rewrite}
+  - op: website.redirect_get
+    path: /websites/redirect
+    module: website
+    risk: read
+    desc: {zh: 读重定向配置, en: Get redirect conf}
+  - op: website.redirect_update
+    path: /websites/redirect/update
+    module: website
+    risk: write
+    desc: {zh: 修改重定向配置, en: Update redirect conf}
+  - op: website.redirect_file_update
+    path: /websites/redirect/file
+    module: website
+    risk: write
+    desc: {zh: 直接覆写重定向配置文件, en: Update redirect file}
+  - op: website.auth_get
+    path: /websites/auths
+    module: website
+    risk: read
+    desc: {zh: 读网站的 HTTP Basic 认证配置, en: Get AuthBasic conf}
+  - op: website.auth_update
+    path: /websites/auths/update
+    module: website
+    risk: write
+    desc: {zh: 修改网站的 HTTP Basic 认证, en: Update AuthBasic conf}
+  - op: website.auth_path_get
+    path: /websites/auths/path
+    module: website
+    risk: read
+    desc: {zh: 读按路径生效的 Basic 认证配置, en: Get path AuthBasic conf}
+  - op: website.auth_path_update
+    path: /websites/auths/path/update
+    module: website
+    risk: write
+    desc: {zh: 修改按路径生效的 Basic 认证, en: Update path AuthBasic conf}
+  - op: website.leech_get
+    path: /websites/leech
+    module: website
+    risk: read
+    desc: {zh: 读防盗链配置, en: Get AntiLeech conf}
+  - op: website.leech_update
+    path: /websites/leech/update
+    module: website
+    risk: write
+    desc: {zh: 修改防盗链配置, en: Update AntiLeech}
+  - op: website.cors_get
+    path: /websites/cors/{id}
+    module: website
+    risk: read
+    desc: {zh: 读跨域配置, en: Get CORS config}
+  - op: website.cors_update
+    path: /websites/cors/update
+    module: website
+    risk: write
+    desc: {zh: 修改跨域配置, en: Update CORS config}
+  - op: website.crosssite
+    path: /websites/crosssite
+    module: website
+    risk: write
+    desc: {zh: 开关跨站访问, en: Operate cross site access}
+  - op: website.realip_get
+    path: /websites/realip/config/{id}
+    module: website
+    risk: read
+    desc: {zh: 读真实 IP 获取配置, en: Get real IP config}
+  - op: website.realip_update
+    path: /websites/realip/config
+    module: website
+    risk: write
+    desc: {zh: 修改真实 IP 获取配置, en: Set real IP config}
+  - op: website.stream_update
+    path: /websites/stream/update
+    module: website
+    risk: write
+    desc: {zh: 修改 stream（四层转发）配置, en: Update stream config}
+  - op: website.lb_list
+    path: /websites/{id}/lbs
+    module: website
+    risk: read
+    desc: {zh: 列出网站的负载均衡上游, en: List website upstreams}
+  - op: website.lb_create
+    path: /websites/lbs/create
+    module: website
+    risk: write
+    desc: {zh: 创建负载均衡上游, en: Create website upstream}
+  - op: website.lb_update
+    path: /websites/lbs/update
+    module: website
+    risk: write
+    desc: {zh: 修改负载均衡上游, en: Update website upstream}
+  - op: website.lb_file_update
+    path: /websites/lbs/file
+    module: website
+    risk: write
+    desc: {zh: 直接覆写负载均衡配置文件, en: Update upstream file}
+  - op: website.lb_delete
+    path: /websites/lbs/del
+    module: website
+    risk: destructive
+    desc: {zh: 删除负载均衡上游, en: Delete website upstream}
+  - op: website.log_search
+    path: /websites/log/search
+    module: website
+    risk: read
+    desc: {zh: 查网站访问/错误日志, en: Get website log}
+  - op: website.log_operate
+    path: /websites/log/operate
+    module: website
+    risk: write
+    desc: {zh: 开关或清空网站日志, en: Operate website log}
+  - op: website.resource
+    path: /websites/resource/{id}
+    module: website
+    risk: read
+    desc: {zh: 查网站关联的资源（应用/数据库/证书）, en: Get website resource}
+
+  # ========================= cert =========================
+  - op: cert.ssl_list
+    path: /websites/ssl/list
+    module: cert
+    risk: read
+    desc: {zh: 列出全部 SSL 证书, en: List SSL certificates}
+  - op: cert.ssl_search
+    path: /websites/ssl/search
+    module: cert
+    risk: read
+    desc: {zh: 分页查询 SSL 证书, en: Page SSL certificates}
+    fields: [id, primaryDomain, status, expireDate, provider, autoRenew]
+  - op: cert.ssl_get
+    path: /websites/ssl/:id
+    module: cert
+    risk: read
+    desc: {zh: 按 id 查一张证书, en: Get SSL by id}
+  - op: cert.ssl_by_website
+    path: /websites/ssl/website/:websiteId
+    module: cert
+    risk: read
+    desc: {zh: 查某个网站正在用的证书, en: Get SSL by website id}
+  - op: cert.ssl_create
+    path: /websites/ssl
+    module: cert
+    risk: write
+    desc: {zh: 创建证书申请任务, en: Create website SSL}
+  - op: cert.ssl_obtain
+    path: /websites/ssl/obtain
+    module: cert
+    risk: write
+    desc: {zh: 申请/续签证书。异步执行，用 vipanel_task 查进度, en: Apply SSL}
+  - op: cert.ssl_update
+    path: /websites/ssl/update
+    module: cert
+    risk: write
+    desc: {zh: 修改证书设置（自动续签等）, en: Update SSL settings}
+  - op: cert.ssl_upload
+    path: /websites/ssl/upload
+    module: cert
+    risk: write
+    desc: {zh: 粘贴证书内容导入一张已有证书, en: Upload SSL by content}
+  - op: cert.ssl_resolve
+    path: /websites/ssl/resolve
+    module: cert
+    risk: read
+    desc: {zh: 解析 DNS 校验记录，申请证书前用, en: Resolve DNS challenge}
+  - op: cert.ssl_delete
+    path: /websites/ssl/del
+    module: cert
+    risk: destructive
+    desc: {zh: 删除证书。正在使用它的网站会失去 HTTPS, en: Delete SSL}
+    noAlways: true
+  - op: cert.acme_search
+    path: /websites/acme/search
+    module: cert
+    risk: read
+    desc: {zh: 列出 ACME 账号, en: Page ACME accounts}
+  - op: cert.acme_create
+    path: /websites/acme
+    module: cert
+    risk: write
+    desc: {zh: 添加 ACME 账号, en: Create ACME account}
+  - op: cert.acme_update
+    path: /websites/acme/update
+    module: cert
+    risk: write
+    desc: {zh: 修改 ACME 账号, en: Update ACME account}
+  - op: cert.acme_delete
+    path: /websites/acme/del
+    module: cert
+    risk: destructive
+    desc: {zh: 删除 ACME 账号，用它签发的证书将无法自动续签, en: Delete ACME account}
+  - op: cert.ca_search
+    path: /websites/ca/search
+    module: cert
+    risk: read
+    desc: {zh: 列出自建 CA, en: Page CAs}
+  - op: cert.ca_get
+    path: /websites/ca/{id}
+    module: cert
+    risk: read
+    desc: {zh: 按 id 查一个自建 CA, en: Get CA by id}
+  - op: cert.ca_create
+    path: /websites/ca
+    module: cert
+    risk: write
+    desc: {zh: 创建自建 CA, en: Create CA}
+  - op: cert.ca_obtain
+    path: /websites/ca/obtain
+    module: cert
+    risk: write
+    desc: {zh: 用自建 CA 签发一张自签证书, en: Obtain self-signed SSL from CA}
+  - op: cert.ca_renew
+    path: /websites/ca/renew
+    module: cert
+    risk: write
+    desc: {zh: 用自建 CA 续签自签证书, en: Renew self-signed SSL}
+  - op: cert.ca_delete
+    path: /websites/ca/del
+    module: cert
+    risk: destructive
+    desc: {zh: 删除自建 CA，它签发过的证书将无法续签, en: Delete CA}
+  - op: cert.dns_search
+    path: /websites/dns/search
+    module: cert
+    risk: read
+    desc: {zh: 列出 DNS 服务商账号, en: Page DNS accounts}
+  - op: cert.dns_create
+    path: /websites/dns
+    module: cert
+    risk: write
+    desc: {zh: 添加 DNS 服务商账号（用于 DNS 校验签证书）, en: Create DNS account}
+  - op: cert.dns_update
+    path: /websites/dns/update
+    module: cert
+    risk: write
+    desc: {zh: 修改 DNS 服务商账号, en: Update DNS account}
+  - op: cert.dns_delete
+    path: /websites/dns/del
+    module: cert
+    risk: destructive
+    desc: {zh: 删除 DNS 服务商账号，依赖它的自动续签会失败, en: Delete DNS account}
+
+  # ========================= container =========================
+  - op: container.list
+    path: /containers/search
+    module: container
+    risk: read
+    resident: true
+    desc: {zh: 分页列出容器, en: Page containers}
+    fields: [containerID, name, imageName, state, runTime, ports, isFromApp, appInstallName]
+  - op: container.name_list
+    path: /containers/list
+    module: container
+    risk: read
+    desc: {zh: 只列容器名，用于选择, en: List container names}
+  - op: container.status
+    path: /containers/status
+    module: container
+    risk: read
+    desc: {zh: 各状态的容器计数, en: Load containers status}
+  - op: container.info
+    path: /containers/info
+    module: container
+    risk: read
+    desc: {zh: 查一个容器的创建参数, en: Load container info}
+  - op: container.inspect
+    path: /containers/inspect
+    module: container
+    risk: read
+    desc: {zh: docker inspect 的原始输出, en: Container inspect}
+  - op: container.logs
+    path: /containers/search/log
+    module: container
+    risk: read
+    desc: {zh: 查容器日志, en: Container logs}
+  - op: container.stats
+    path: /containers/stats/:id
+    module: container
+    risk: read
+    desc: {zh: 查单个容器的资源占用, en: Container stats}
+  - op: container.stats_all
+    path: /containers/list/stats
+    module: container
+    risk: read
+    desc: {zh: 查全部容器的资源占用, en: Load all container stats}
+  - op: container.item_stats
+    path: /containers/item/stats
+    module: container
+    risk: read
+    desc: {zh: 查容器占用的磁盘大小, en: Load container stats size}
+  - op: container.limit
+    path: /containers/limit
+    module: container
+    risk: read
+    desc: {zh: 查这台机器的 CPU/内存上限，创建容器时用, en: Load container limits}
+  - op: container.users
+    path: /containers/users
+    module: container
+    risk: read
+    desc: {zh: 查容器内可用的用户, en: Load container users}
+  - op: container.list_by_image
+    path: /containers/list/byimage
+    module: container
+    risk: read
+    desc: {zh: 查用了某个镜像的容器, en: List containers by image}
+  - op: container.create
+    path: /containers
+    module: container
+    risk: write
+    desc: {zh: 创建容器, en: Create container}
+  - op: container.update
+    path: /containers/update
+    module: container
+    risk: write
+    desc: {zh: 修改容器配置，会重建容器, en: Update container}
+  - op: container.upgrade
+    path: /containers/upgrade
+    module: container
+    risk: write
+    desc: {zh: 用新镜像重建容器, en: Upgrade container image}
+  - op: container.rename
+    path: /containers/rename
+    module: container
+    risk: write
+    desc: {zh: 重命名容器, en: Rename container}
+  - op: container.commit
+    path: /containers/commit
+    module: container
+    risk: write
+    desc: {zh: 把容器当前状态提交成新镜像, en: Commit container}
+  - op: container.clean_log
+    path: /containers/clean/log
+    module: container
+    risk: write
+    desc: {zh: 清空容器日志, en: Clean container log}
+  - op: container.prune
+    path: /containers/prune
+    module: container
+    risk: destructive
+    desc: {zh: 批量清理已停止的容器/无用镜像/网络/卷，按 pruneType 决定清什么，不可恢复, en: Prune containers/images/networks/volumes}
+    noAlways: true
+
+  # /containers/operate 的 operation 是 oneof=up start stop restart kill pause
+  # unpause remove——remove 会删容器。拆开，风险档才说得清。
+  - op: container.start
+    path: /containers/operate
+    module: container
+    risk: write
+    fixed: {operation: start}
+    desc: {zh: 启动容器, en: Start container}
+  - op: container.stop
+    path: /containers/operate
+    module: container
+    risk: write
+    fixed: {operation: stop}
+    desc: {zh: 停止容器, en: Stop container}
+  - op: container.restart
+    path: /containers/operate
+    module: container
+    risk: write
+    fixed: {operation: restart}
+    desc: {zh: 重启容器, en: Restart container}
+  - op: container.pause
+    path: /containers/operate
+    module: container
+    risk: write
+    fixed: {operation: pause}
+    desc: {zh: 暂停容器, en: Pause container}
+  - op: container.unpause
+    path: /containers/operate
+    module: container
+    risk: write
+    fixed: {operation: unpause}
+    desc: {zh: 恢复被暂停的容器, en: Unpause container}
+  - op: container.kill
+    path: /containers/operate
+    module: container
+    risk: destructive
+    fixed: {operation: kill}
+    desc: {zh: 强杀容器，进程不会收到优雅退出的机会, en: Kill container}
+  - op: container.remove
+    path: /containers/operate
+    module: container
+    risk: destructive
+    fixed: {operation: remove}
+    desc: {zh: 删除容器，容器内未挂载的数据会丢失, en: Remove container}
+    noAlways: true
+
+  - op: container.image_list
+    path: /containers/image/all
+    module: container
+    risk: read
+    desc: {zh: 列出全部镜像, en: List all images}
+  - op: container.image_search
+    path: /containers/image/search
+    module: container
+    risk: read
+    desc: {zh: 分页查询镜像, en: Page images}
+    fields: [id, tags, size, createdAt, isUsed]
+  - op: container.image_options
+    path: /containers/image
+    module: container
+    risk: read
+    desc: {zh: 只列镜像名，用于选择, en: List image options}
+  - op: container.image_pull
+    path: /containers/image/pull
+    module: container
+    risk: write
+    desc: {zh: 拉取镜像。异步执行，用 vipanel_task 查进度, en: Pull image}
+  - op: container.image_push
+    path: /containers/image/push
+    module: container
+    risk: write
+    desc: {zh: 推送镜像到仓库, en: Push image}
+  - op: container.image_build
+    path: /containers/image/build
+    module: container
+    risk: write
+    desc: {zh: 从 Dockerfile 构建镜像, en: Build image}
+  - op: container.image_tag
+    path: /containers/image/tag
+    module: container
+    risk: write
+    desc: {zh: 给镜像打 tag, en: Tag image}
+  - op: container.image_save
+    path: /containers/image/save
+    module: container
+    risk: write
+    desc: {zh: 把镜像导出成文件, en: Save image to file}
+  - op: container.image_load
+    path: /containers/image/load
+    module: container
+    risk: write
+    desc: {zh: 从文件导入镜像, en: Load image from file}
+  - op: container.image_remove
+    path: /containers/image/remove
+    module: container
+    risk: destructive
+    desc: {zh: 删除镜像。正在使用它的容器会无法重建, en: Remove image}
+  - op: container.network_list
+    path: /containers/network/search
+    module: container
+    risk: read
+    desc: {zh: 列出容器网络, en: Page networks}
+  - op: container.network_create
+    path: /containers/network
+    module: container
+    risk: write
+    desc: {zh: 创建容器网络, en: Create network}
+  - op: container.network_delete
+    path: /containers/network/del
+    module: container
+    risk: destructive
+    desc: {zh: 删除容器网络，接在上面的容器会断网, en: Delete network}
+  - op: container.volume_list
+    path: /containers/volume/search
+    module: container
+    risk: read
+    desc: {zh: 列出存储卷, en: Page volumes}
+  - op: container.volume_create
+    path: /containers/volume
+    module: container
+    risk: write
+    desc: {zh: 创建存储卷, en: Create volume}
+  - op: container.volume_delete
+    path: /containers/volume/del
+    module: container
+    risk: destructive
+    desc: {zh: 删除存储卷，卷内数据一并丢失且不可恢复, en: Delete volume}
+    noAlways: true
+  - op: container.compose_list
+    path: /containers/compose/search
+    module: container
+    risk: read
+    desc: {zh: 列出 compose 项目, en: Page composes}
+  - op: container.compose_create
+    path: /containers/compose
+    module: container
+    risk: write
+    desc: {zh: 创建 compose 项目, en: Create compose}
+  - op: container.compose_update
+    path: /containers/compose/update
+    module: container
+    risk: write
+    desc: {zh: 修改 compose 文件, en: Update compose}
+  - op: container.compose_test
+    path: /containers/compose/test
+    module: container
+    risk: read
+    desc: {zh: 校验 compose 文件格式, en: Test compose format}
+  - op: container.compose_env
+    path: /containers/compose/env
+    module: container
+    risk: read
+    desc: {zh: 读 compose 的环境变量, en: Load compose env}
+  - op: container.compose_operate
+    path: /containers/compose/operate
+    module: container
+    risk: destructive
+    desc: {zh: 对 compose 项目执行 up/down/删除等操作。down 会停掉整组服务，删除不可恢复, en: Operate compose project}
+    noAlways: true
+  - op: container.compose_clean_log
+    path: /containers/compose/clean/log
+    module: container
+    risk: write
+    desc: {zh: 清空 compose 项目日志, en: Clean compose log}
+  - op: container.template_list
+    path: /containers/template/search
+    module: container
+    risk: read
+    desc: {zh: 列出 compose 模板, en: Page compose templates}
+  - op: container.template_create
+    path: /containers/template
+    module: container
+    risk: write
+    desc: {zh: 创建 compose 模板, en: Create compose template}
+  - op: container.template_update
+    path: /containers/template/update
+    module: container
+    risk: write
+    desc: {zh: 修改 compose 模板, en: Update compose template}
+  - op: container.template_batch
+    path: /containers/template/batch
+    module: container
+    risk: write
+    desc: {zh: 批量导入 compose 模板, en: Batch import compose templates}
+  - op: container.template_delete
+    path: /containers/template/del
+    module: container
+    risk: destructive
+    desc: {zh: 删除 compose 模板, en: Delete compose template}
+  - op: container.repo_list
+    path: /containers/repo/search
+    module: container
+    risk: read
+    desc: {zh: 列出镜像仓库, en: Page image repos}
+  - op: container.repo_status
+    path: /containers/repo/status
+    module: container
+    risk: read
+    desc: {zh: 查镜像仓库连通状态, en: Load repo status}
+  - op: container.repo_create
+    path: /containers/repo
+    module: container
+    risk: write
+    desc: {zh: 添加镜像仓库, en: Create image repo}
+  - op: container.repo_update
+    path: /containers/repo/update
+    module: container
+    risk: write
+    desc: {zh: 修改镜像仓库, en: Update image repo}
+  - op: container.repo_delete
+    path: /containers/repo/del
+    module: container
+    risk: destructive
+    desc: {zh: 删除镜像仓库配置, en: Delete image repo}
+  - op: container.docker_status
+    path: /containers/docker/status
+    module: container
+    risk: read
+    desc: {zh: 查 docker 服务状态, en: Load docker status}
+  - op: container.docker_operate
+    path: /containers/docker/operate
+    module: container
+    risk: destructive
+    desc: {zh: 启停或重启 docker 服务本身。停掉它这台机器上所有容器都会停, en: Operate docker daemon}
+    noAlways: true
+  - op: container.daemon_get
+    path: /containers/daemonjson
+    module: container
+    risk: read
+    desc: {zh: 读 docker daemon.json 的结构化配置, en: Load docker daemon.json}
+  - op: container.daemon_file
+    path: /containers/daemonjson/file
+    module: container
+    risk: read
+    desc: {zh: 读 docker daemon.json 的原文, en: Load raw docker daemon.json}
+  - op: container.daemon_update
+    path: /containers/daemonjson/update
+    module: container
+    risk: write
+    desc: {zh: 修改 docker daemon.json，会重启 docker, en: Update docker daemon.json}
+  - op: container.daemon_update_file
+    path: /containers/daemonjson/update/byfile
+    module: container
+    risk: write
+    desc: {zh: 用整份文件覆盖 docker daemon.json，会重启 docker, en: Update docker daemon.json by file}
+  - op: container.ipv6_update
+    path: /containers/ipv6option/update
+    module: container
+    risk: write
+    desc: {zh: 修改 docker 的 IPv6 配置，会重启 docker, en: Update docker ipv6 option}
+  - op: container.log_option_update
+    path: /containers/logoption/update
+    module: container
+    risk: write
+    desc: {zh: 修改 docker 的日志驱动配置，会重启 docker, en: Update docker log option}

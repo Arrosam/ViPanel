@@ -80,3 +80,4 @@ superpowers
 .worktrees/
 .codex/
 agent/hook
+agent/mcpgen

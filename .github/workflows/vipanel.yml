@@ -1,0 +1,45 @@
+# ViPanel 自己的 CI。上游那三个 workflow 都被 `if: github.repository == '1Panel-dev/1Panel'`
+# 挡住了，fork 上一个都不跑。
+#
+# 这是个**新文件**，不改上游任何文件，所以不增加 rebase 冲突面
+# （PORT-1PANEL.md §2.1 把冲突锁在五个文件里）。
+name: ViPanel
+
+on:
+  push:
+    branches: [main, "feat/**"]
+  pull_request:
+
+jobs:
+  agent:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: agent/go.mod
+          cache-dependency-path: agent/go.sum
+
+      - name: build
+        working-directory: agent
+        run: go build ./...
+
+      - name: test
+        working-directory: agent
+        run: go test ./app/service/vipanel/...
+
+      # fail-closed：上游 rebase 后新加的端点默认是关的。
+      # 一个没人在 manifest 里看过的端点，绝不能自动获得
+      # 「AI 可以以 root 调用」的地位。见 MCP.md §5。
+      - name: MCP 工具目录未分类检查
+        working-directory: agent
+        run: go run ./cmd/mcpgen -root .. -check
+
+      # 改了 manifest.yaml 却忘了重新生成，目录和清单就对不上了，
+      # 而且是**静默**对不上——运行时用的是 catalog.gen.go。
+      - name: MCP 工具目录是否为最新
+        working-directory: agent
+        run: |
+          go run ./cmd/mcpgen -root ..
+          git diff --exit-code -- app/service/vipanel/mcp/catalog.gen.go \
+            || { echo "catalog.gen.go 不是最新的，请跑 go run ./cmd/mcpgen -root .. 并提交"; exit 1; }

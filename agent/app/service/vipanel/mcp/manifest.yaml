@@ -32,47 +32,47 @@ modules:
   - key: database
     title: 数据库
     desc: MySQL/PG/Mongo/Redis
-    status: pending
+    status: done
   - key: cron
     title: 计划任务
     desc: 计划任务/脚本库
-    status: pending
+    status: done
   - key: backup
     title: 备份
     desc: 备份账号/快照
-    status: pending
+    status: done
   - key: firewall
     title: 防火墙
     desc: 防火墙/端口/IP
-    status: pending
+    status: done
   - key: ssh
     title: SSH
     desc: SSH配置/会话
-    status: pending
+    status: done
   - key: system
     title: 系统
     desc: 磁盘/进程/设备
-    status: pending
+    status: done
   - key: runtime
     title: 运行环境
     desc: PHP/Node/Java/Go/Python 环境
-    status: pending
+    status: done
   - key: monitor
     title: 监控
     desc: 仪表盘/告警/日志
-    status: pending
+    status: done
   - key: toolbox
     title: 工具箱
     desc: clam/fail2ban/FTP/supervisor
-    status: pending
+    status: done
   - key: setting
     title: 面板设置
     desc: 面板设置/用户
-    status: pending
+    status: done
   - key: ai
     title: AI
     desc: ollama/GPU/模型账号/agents
-    status: pending
+    status: done
 
 # --- 显式排除 ---------------------------------------------------------------
 # /ai/console/** 不需要写在这里，生成器无条件丢弃它（提权洞，MCP.md §1.1）。
@@ -92,11 +92,20 @@ excluded:
   - paths:
       - /process/ws
       - /websites/exec/composer
-    reason: 长连接/流式端点，不适合 MCP 的请求-响应模型
+      - /hosts/terminal/local
+      - /hosts/terminal/ssh
+      - /hosts/terminal/container
+    reason: 长连接/流式端点，不适合 MCP 的请求-响应模型；终端 agent 自带 Bash
 
   - paths:
       - /health/check
     reason: 面板自检，对 agent 无意义
+
+  - paths:
+      - /dashboard/system/restart/:operation
+    reason: |
+      重启面板会切断发起这次调用的会话自己（agent 进程、钩子、MCP 连接一起没），
+      重启主机则用 Bash 更直接。两种结果都不该由一个 MCP 工具触发。
 
   - paths:
       - /apps/icon/:key
@@ -113,7 +122,38 @@ excluded:
 
   - paths:
       - /apps/installed/sort/update
-    reason: 纯 UI 排序，不改变任何实际状态
+      - /dashboard/app/launcher
+      - /dashboard/app/launcher/option
+      - /dashboard/app/launcher/show
+      - /dashboard/quick/change
+      - /dashboard/quick/option
+    reason: 纯 UI 布局与排序，不改变任何实际状态
+
+  - paths:
+      - /dashboard/current/node
+    reason: 多节点指标，属于上游商业版范围
+
+  - paths:
+      - /ai/agents/channel/feishu/get
+      - /ai/agents/channel/feishu/update
+      - /ai/agents/channel/telegram/get
+      - /ai/agents/channel/telegram/update
+      - /ai/agents/channel/discord/get
+      - /ai/agents/channel/discord/update
+      - /ai/agents/channel/wecom/get
+      - /ai/agents/channel/wecom/update
+      - /ai/agents/channel/dingtalk/get
+      - /ai/agents/channel/dingtalk/update
+      - /ai/agents/channel/weixin/get
+      - /ai/agents/channel/weixin/login
+      - /ai/agents/channel/qqbot/get
+      - /ai/agents/channel/qqbot/update
+      - /ai/agents/channel/delete
+      - /ai/agents/channel/pairing/approve
+    reason: |
+      Agent 的即时通讯渠道配置里装的是各家平台的 bot token 和 webhook 密钥。
+      让 agent 读写这些等于给它一条把自己接到外部通讯渠道、并把凭据取走的路，
+      收益远小于风险。要配这些请在面板上手动做。
 
   - paths:
       - /websites/ssl/upload/file
@@ -1119,3 +1159,2035 @@ ops:
     module: container
     risk: write
     desc: {zh: 修改 docker 的日志驱动配置，会重启 docker, en: Update docker log option}
+
+  # ========================= database =========================
+  - op: database.list
+    path: /databases/db/search
+    module: database
+    risk: read
+    resident: true
+    desc: {zh: 分页列出所有数据库实例（含远程）, en: Page database instances}
+    fields: [id, name, type, from, address, port, username]
+  - op: database.items
+    path: /databases/db/item/:type
+    module: database
+    risk: read
+    desc: {zh: 按类型列出数据库实例名，用于选择, en: List database names by type}
+  - op: database.list_by_type
+    path: /databases/db/list/:type
+    module: database
+    risk: read
+    desc: {zh: 按类型列出数据库实例, en: List databases by type}
+  - op: database.get
+    path: /databases/db/:name
+    module: database
+    risk: read
+    desc: {zh: 按名字查一个数据库实例, en: Get database by name}
+  - op: database.common_info
+    path: /databases/common/info
+    module: database
+    risk: read
+    desc: {zh: 查数据库的基础信息, en: Load database base info}
+  - op: database.conf_get
+    path: /databases/common/load/file
+    module: database
+    risk: read
+    desc: {zh: 读数据库配置文件, en: Load database config file}
+  - op: database.conf_update
+    path: /databases/common/update/conf
+    module: database
+    risk: write
+    desc: {zh: 覆写数据库配置文件，会重启数据库, en: Update database config file}
+  - op: database.remote_create
+    path: /databases/db
+    module: database
+    risk: write
+    desc: {zh: 添加一个远程数据库实例, en: Create remote database}
+  - op: database.remote_update
+    path: /databases/db/update
+    module: database
+    risk: write
+    desc: {zh: 修改远程数据库实例, en: Update remote database}
+  - op: database.remote_check
+    path: /databases/db/check
+    module: database
+    risk: read
+    desc: {zh: 测试远程数据库连通性, en: Check remote database connectivity}
+  - op: database.remote_delete_check
+    path: /databases/db/del/check
+    module: database
+    risk: read
+    desc: {zh: 删除远程数据库实例前检查关联资源, en: Check before deleting remote database}
+  - op: database.remote_delete
+    path: /databases/db/del
+    module: database
+    risk: destructive
+    desc: {zh: 删除远程数据库实例配置, en: Delete remote database}
+    noAlways: true
+
+  # -- MySQL --
+  - op: database.mysql_list
+    path: /databases/search
+    module: database
+    risk: read
+    desc: {zh: 分页列出 MySQL 库, en: Page MySQL databases}
+    fields: [id, name, mysqlName, format, permission, description]
+  - op: database.mysql_status
+    path: /databases/status
+    module: database
+    risk: read
+    desc: {zh: 查 MySQL 运行状态, en: Load MySQL status}
+  - op: database.mysql_variables
+    path: /databases/variables
+    module: database
+    risk: read
+    desc: {zh: 读 MySQL 性能参数, en: Load MySQL variables}
+  - op: database.mysql_variables_update
+    path: /databases/variables/update
+    module: database
+    risk: write
+    desc: {zh: 调整 MySQL 性能参数, en: Update MySQL variables}
+  - op: database.mysql_load_remote
+    path: /databases/load
+    module: database
+    risk: read
+    desc: {zh: 从远端同步 MySQL 库列表, en: Load MySQL databases from remote}
+  - op: database.mysql_format_options
+    path: /databases/format/options
+    module: database
+    risk: read
+    desc: {zh: 列出建库可选的字符集与排序规则, en: List MySQL charset options}
+  - op: database.mysql_create
+    path: /databases
+    module: database
+    risk: write
+    desc: {zh: 创建 MySQL 库, en: Create MySQL database}
+  - op: database.mysql_description
+    path: /databases/description/update
+    module: database
+    risk: write
+    desc: {zh: 修改 MySQL 库的备注, en: Update MySQL database description}
+  - op: database.mysql_delete_check
+    path: /databases/del/check
+    module: database
+    risk: read
+    desc: {zh: 删库前检查关联资源, en: Check before deleting MySQL database}
+  - op: database.mysql_delete
+    path: /databases/del
+    module: database
+    risk: destructive
+    desc: {zh: 删除 MySQL 库，库里的数据一并丢失且不可恢复, en: Delete MySQL database}
+    noAlways: true
+  - op: database.mysql_remote_access
+    path: /databases/remote
+    module: database
+    risk: read
+    desc: {zh: 查 MySQL root 的远程访问设置, en: Load MySQL root remote access}
+  - op: database.mysql_change_access
+    path: /databases/change/access
+    module: database
+    risk: write
+    desc: {zh: 修改 MySQL root 的访问权限, en: Change MySQL root access}
+    noAlways: true
+  - op: database.mysql_root_password
+    path: /databases/change/password
+    module: database
+    risk: write
+    desc: {zh: 修改 MySQL root 密码，连着它的应用会失联, en: Change MySQL root password}
+    noAlways: true
+  - op: database.mysql_users
+    path: /databases/users/search
+    module: database
+    risk: read
+    desc: {zh: 列出 MySQL 用户, en: List MySQL users}
+  - op: database.mysql_user_create
+    path: /databases/users
+    module: database
+    risk: write
+    desc: {zh: 创建 MySQL 用户, en: Create MySQL user}
+  - op: database.mysql_user_update
+    path: /databases/users/update
+    module: database
+    risk: write
+    desc: {zh: 修改 MySQL 用户的访问来源与备注, en: Update MySQL user}
+  - op: database.mysql_user_password
+    path: /databases/users/password
+    module: database
+    risk: write
+    desc: {zh: 修改 MySQL 用户密码, en: Change MySQL user password}
+    noAlways: true
+  - op: database.mysql_user_password_save
+    path: /databases/users/password/save
+    module: database
+    risk: write
+    desc: {zh: 把已知的 MySQL 用户密码补录进面板, en: Save MySQL user password locally}
+    noAlways: true
+  - op: database.mysql_user_delete
+    path: /databases/users/del
+    module: database
+    risk: destructive
+    desc: {zh: 删除 MySQL 用户，用这个账号连库的程序会立刻失败, en: Delete MySQL user}
+  - op: database.mysql_grants
+    path: /databases/grants/search
+    module: database
+    risk: read
+    desc: {zh: 列出 MySQL 授权, en: List MySQL grants}
+  - op: database.mysql_grants_summary
+    path: /databases/grants/summary
+    module: database
+    risk: read
+    desc: {zh: 查 MySQL 授权汇总, en: List MySQL grant summary}
+  - op: database.mysql_grant
+    path: /databases/grants
+    module: database
+    risk: write
+    desc: {zh: 给 MySQL 用户授权, en: Grant MySQL user}
+  - op: database.mysql_grant_revoke
+    path: /databases/grants/del
+    module: database
+    risk: destructive
+    desc: {zh: 收回 MySQL 授权, en: Revoke MySQL grant}
+
+  # -- PostgreSQL --
+  - op: database.pg_list
+    path: /databases/pg/search
+    module: database
+    risk: read
+    desc: {zh: 分页列出 PostgreSQL 库, en: Page PostgreSQL databases}
+    fields: [id, name, postgresqlName, username, description]
+  - op: database.pg_load_remote
+    path: /databases/pg/:database/load
+    module: database
+    risk: read
+    desc: {zh: 从远端同步 PostgreSQL 库列表, en: Load PostgreSQL databases from remote}
+  - op: database.pg_create
+    path: /databases/pg
+    module: database
+    risk: write
+    desc: {zh: 创建 PostgreSQL 库, en: Create PostgreSQL database}
+  - op: database.pg_bind
+    path: /databases/pg/bind
+    module: database
+    risk: write
+    desc: {zh: 给 PostgreSQL 库绑定用户, en: Bind PostgreSQL user}
+  - op: database.pg_description
+    path: /databases/pg/description
+    module: database
+    risk: write
+    desc: {zh: 修改 PostgreSQL 库的备注, en: Update PostgreSQL description}
+  - op: database.pg_password
+    path: /databases/pg/password
+    module: database
+    risk: write
+    desc: {zh: 修改 PostgreSQL 用户密码, en: Change PostgreSQL password}
+    noAlways: true
+  - op: database.pg_privileges
+    path: /databases/pg/privileges
+    module: database
+    risk: write
+    desc: {zh: 修改 PostgreSQL 用户权限, en: Change PostgreSQL privileges}
+  - op: database.pg_delete_check
+    path: /databases/pg/del/check
+    module: database
+    risk: read
+    desc: {zh: 删库前检查关联资源, en: Check before deleting PostgreSQL database}
+  - op: database.pg_delete
+    path: /databases/pg/del
+    module: database
+    risk: destructive
+    desc: {zh: 删除 PostgreSQL 库，数据一并丢失且不可恢复, en: Delete PostgreSQL database}
+    noAlways: true
+
+  # -- MongoDB --
+  - op: database.mongo_list
+    path: /databases/mongodb/search
+    module: database
+    risk: read
+    desc: {zh: 分页列出 MongoDB 库, en: Page MongoDB databases}
+    fields: [id, name, mongodbName, username, description]
+  - op: database.mongo_load_remote
+    path: /databases/mongodb/load
+    module: database
+    risk: read
+    desc: {zh: 从远端同步 MongoDB 库列表, en: Load MongoDB databases from remote}
+  - op: database.mongo_create
+    path: /databases/mongodb
+    module: database
+    risk: write
+    desc: {zh: 创建 MongoDB 库, en: Create MongoDB database}
+  - op: database.mongo_bind
+    path: /databases/mongodb/bind
+    module: database
+    risk: write
+    desc: {zh: 给 MongoDB 库绑定用户, en: Bind MongoDB user}
+  - op: database.mongo_description
+    path: /databases/mongodb/description
+    module: database
+    risk: write
+    desc: {zh: 修改 MongoDB 库的备注, en: Update MongoDB description}
+  - op: database.mongo_password
+    path: /databases/mongodb/password
+    module: database
+    risk: write
+    desc: {zh: 修改 MongoDB 用户密码, en: Change MongoDB password}
+    noAlways: true
+  - op: database.mongo_root_password
+    path: /databases/mongodb/root/password
+    module: database
+    risk: write
+    desc: {zh: 修改 MongoDB root 密码，连着它的应用会失联, en: Change MongoDB root password}
+    noAlways: true
+  - op: database.mongo_privileges
+    path: /databases/mongodb/privileges
+    module: database
+    risk: read
+    desc: {zh: 读 MongoDB 用户权限, en: Load MongoDB privileges}
+  - op: database.mongo_privileges_change
+    path: /databases/mongodb/privileges/change
+    module: database
+    risk: write
+    desc: {zh: 修改 MongoDB 用户权限, en: Change MongoDB privileges}
+  - op: database.mongo_delete_check
+    path: /databases/mongodb/del/check
+    module: database
+    risk: read
+    desc: {zh: 删库前检查关联资源, en: Check before deleting MongoDB database}
+  - op: database.mongo_delete
+    path: /databases/mongodb/del
+    module: database
+    risk: destructive
+    desc: {zh: 删除 MongoDB 库，数据一并丢失且不可恢复, en: Delete MongoDB database}
+    noAlways: true
+
+  # -- Redis --
+  - op: database.redis_status
+    path: /databases/redis/status
+    module: database
+    risk: read
+    desc: {zh: 查 Redis 运行状态, en: Load Redis status}
+  - op: database.redis_conf
+    path: /databases/redis/conf
+    module: database
+    risk: read
+    desc: {zh: 读 Redis 配置, en: Load Redis conf}
+  - op: database.redis_conf_update
+    path: /databases/redis/conf/update
+    module: database
+    risk: write
+    desc: {zh: 修改 Redis 配置, en: Update Redis conf}
+  - op: database.redis_persistence
+    path: /databases/redis/persistence/conf
+    module: database
+    risk: read
+    desc: {zh: 读 Redis 持久化配置, en: Load Redis persistence conf}
+  - op: database.redis_persistence_update
+    path: /databases/redis/persistence/update
+    module: database
+    risk: write
+    desc: {zh: 修改 Redis 持久化配置, en: Update Redis persistence conf}
+  - op: database.redis_password
+    path: /databases/redis/password
+    module: database
+    risk: write
+    desc: {zh: 修改 Redis 密码，连着它的应用会失联, en: Change Redis password}
+    noAlways: true
+  - op: database.redis_cli_check
+    path: /databases/redis/check
+    module: database
+    risk: read
+    desc: {zh: 检查 redis-cli 是否可用, en: Check redis-cli}
+  - op: database.redis_cli_install
+    path: /databases/redis/install/cli
+    module: database
+    risk: write
+    desc: {zh: 安装 redis-cli, en: Install redis-cli}
+
+  # ========================= cron =========================
+  - op: cron.list
+    path: /cronjobs/search
+    module: cron
+    risk: read
+    desc: {zh: 分页列出计划任务, en: Page cronjobs}
+    fields: [id, name, type, spec, status, lastRecordTime]
+  - op: cron.info
+    path: /cronjobs/load/info
+    module: cron
+    risk: read
+    desc: {zh: 查一个计划任务的详情, en: Load cronjob info}
+  - op: cron.next_times
+    path: /cronjobs/next
+    module: cron
+    risk: read
+    desc: {zh: 按 cron 表达式算出接下来几次执行时间, en: Load next run times for a spec}
+  - op: cron.create
+    path: /cronjobs
+    module: cron
+    risk: write
+    desc: {zh: 创建计划任务, en: Create cronjob}
+  - op: cron.update
+    path: /cronjobs/update
+    module: cron
+    risk: write
+    desc: {zh: 修改计划任务, en: Update cronjob}
+  - op: cron.status
+    path: /cronjobs/status
+    module: cron
+    risk: write
+    desc: {zh: 启用或停用计划任务, en: Toggle cronjob status}
+  - op: cron.group_update
+    path: /cronjobs/group/update
+    module: cron
+    risk: write
+    desc: {zh: 修改计划任务的分组, en: Update cronjob group}
+  - op: cron.run_now
+    path: /cronjobs/handle
+    module: cron
+    risk: write
+    desc: {zh: 立刻手动执行一次计划任务, en: Run cronjob once}
+  - op: cron.stop
+    path: /cronjobs/stop
+    module: cron
+    risk: write
+    desc: {zh: 中止正在执行的计划任务, en: Stop running cronjob}
+  - op: cron.delete
+    path: /cronjobs/del
+    module: cron
+    risk: destructive
+    desc: {zh: 删除计划任务, en: Delete cronjob}
+  - op: cron.records
+    path: /cronjobs/search/records
+    module: cron
+    risk: read
+    desc: {zh: 查计划任务的执行记录, en: Page cronjob records}
+  - op: cron.record_log
+    path: /cronjobs/records/log
+    module: cron
+    risk: read
+    desc: {zh: 读一次执行记录的日志, en: Load cronjob record log}
+  - op: cron.records_clean
+    path: /cronjobs/records/clean
+    module: cron
+    risk: destructive
+    desc: {zh: 清空计划任务的全部执行记录，连同产生的备份文件, en: Clean cronjob records}
+  - op: cron.script_options
+    path: /cronjobs/script/options
+    module: cron
+    risk: read
+    desc: {zh: 列出脚本库里可选的脚本, en: List script library options}
+  - op: cron.export
+    path: /cronjobs/export
+    module: cron
+    risk: read
+    desc: {zh: 导出计划任务清单, en: Export cronjob list}
+  - op: cron.import
+    path: /cronjobs/import
+    module: cron
+    risk: write
+    desc: {zh: 导入计划任务清单, en: Import cronjob list}
+
+  # ========================= backup =========================
+  - op: backup.accounts
+    path: /backups/search
+    module: backup
+    risk: read
+    desc: {zh: 分页列出备份账号, en: Page backup accounts}
+    fields: [id, name, type, bucket, backupPath]
+  - op: backup.account_options
+    path: /backups/options
+    module: backup
+    risk: read
+    desc: {zh: 列出可选的备份账号, en: List backup account options}
+  - op: backup.local_dir
+    path: /backups/local
+    module: backup
+    risk: read
+    desc: {zh: 查本地备份目录, en: Get local backup dir}
+  - op: backup.account_create
+    path: /backups
+    module: backup
+    risk: write
+    desc: {zh: 添加备份账号（对象存储 / SFTP / WebDAV 等）, en: Create backup account}
+  - op: backup.account_update
+    path: /backups/update
+    module: backup
+    risk: write
+    desc: {zh: 修改备份账号, en: Update backup account}
+  - op: backup.account_check
+    path: /backups/conn/check
+    module: backup
+    risk: read
+    desc: {zh: 测试备份账号连通性, en: Check backup account}
+  - op: backup.account_in_use
+    path: /backups/check/{name}
+    module: backup
+    risk: read
+    desc: {zh: 查一个备份账号有没有被引用, en: Check backup account usage}
+  - op: backup.buckets
+    path: /backups/buckets
+    module: backup
+    risk: read
+    desc: {zh: 列出对象存储里的 bucket, en: List buckets}
+  - op: backup.refresh_token
+    path: /backups/refresh/token
+    module: backup
+    risk: write
+    desc: {zh: 刷新备份账号的授权令牌, en: Refresh backup account token}
+  - op: backup.account_delete
+    path: /backups/del
+    module: backup
+    risk: destructive
+    desc: {zh: 删除备份账号，依赖它的计划任务会失败, en: Delete backup account}
+    noAlways: true
+  - op: backup.run
+    path: /backups/backup
+    module: backup
+    risk: write
+    desc: {zh: 立刻备份某个应用/网站/数据库, en: Backup data now}
+  - op: backup.records
+    path: /backups/record/search
+    module: backup
+    risk: read
+    desc: {zh: 分页列出备份记录, en: Page backup records}
+    fields: [id, type, name, fileName, size, createdAt, source]
+  - op: backup.records_by_cronjob
+    path: /backups/record/search/bycronjob
+    module: backup
+    risk: read
+    desc: {zh: 按计划任务查备份记录, en: Page backup records by cronjob}
+  - op: backup.record_size
+    path: /backups/record/size
+    module: backup
+    risk: read
+    desc: {zh: 查备份记录占用的空间, en: Load backup record size}
+  - op: backup.record_files
+    path: /backups/search/files
+    module: backup
+    risk: read
+    desc: {zh: 列出备份账号里的文件, en: List files in backup account}
+  - op: backup.record_description
+    path: /backups/record/description/update
+    module: backup
+    risk: write
+    desc: {zh: 修改备份记录的备注, en: Update backup record description}
+  - op: backup.record_download
+    path: /backups/record/download
+    module: backup
+    risk: write
+    desc: {zh: 把远端备份拉到本地, en: Download backup record}
+  - op: backup.upload
+    path: /backups/upload
+    module: backup
+    risk: write
+    desc: {zh: 上传一个备份文件备用于恢复, en: Upload backup file}
+  - op: backup.record_delete
+    path: /backups/record/del
+    module: backup
+    risk: destructive
+    desc: {zh: 删除备份记录及其文件，不可恢复, en: Delete backup record}
+    noAlways: true
+  - op: backup.recover
+    path: /backups/recover
+    module: backup
+    risk: destructive
+    desc: {zh: 用备份覆盖当前数据。当前数据会被直接替换掉，不可撤销, en: Recover data from backup}
+    noAlways: true
+  - op: backup.recover_by_upload
+    path: /backups/recover/byupload
+    module: backup
+    risk: destructive
+    desc: {zh: 用上传的备份文件覆盖当前数据，不可撤销, en: Recover from uploaded backup}
+    noAlways: true
+
+  # ========================= monitor =========================
+  - op: monitor.os
+    path: /dashboard/base/os
+    module: monitor
+    risk: read
+    desc: {zh: 查操作系统信息, en: Load OS info}
+  - op: monitor.base
+    path: /dashboard/base/:ioOption/:netOption
+    module: monitor
+    risk: read
+    desc: {zh: 查仪表盘基础指标（CPU/内存/磁盘/网络）, en: Load dashboard base info}
+  - op: monitor.current
+    path: /dashboard/current/:ioOption/:netOption
+    module: monitor
+    risk: read
+    desc: {zh: 查当前实时负载, en: Load current load}
+  - op: monitor.top_cpu
+    path: /dashboard/current/top/cpu
+    module: monitor
+    risk: read
+    desc: {zh: 查 CPU 占用最高的进程, en: Load top CPU processes}
+  - op: monitor.top_mem
+    path: /dashboard/current/top/mem
+    module: monitor
+    risk: read
+    desc: {zh: 查内存占用最高的进程, en: Load top memory processes}
+  - op: monitor.tasks
+    path: /logs/tasks/search
+    module: monitor
+    risk: read
+    desc: {zh: 分页查任务记录（装应用、签证书这类长任务）, en: Page task logs}
+    fields: [id, name, type, status, taskID, startedAt]
+  - op: monitor.tasks_executing
+    path: /logs/tasks/executing/count
+    module: monitor
+    risk: read
+    desc: {zh: 查当前正在执行的任务数, en: Count executing tasks}
+  - op: monitor.task_log
+    path: /logs/tasks/read
+    module: monitor
+    risk: read
+    desc: {zh: 按行读一个任务的日志, en: Read task log by line}
+  - op: monitor.system_log_files
+    path: /logs/system/files
+    module: monitor
+    risk: read
+    desc: {zh: 列出主机的系统日志文件, en: List system log files}
+  - op: monitor.system_log_read
+    path: /logs/system/read
+    module: monitor
+    risk: read
+    desc: {zh: 读主机系统日志, en: Read host system log}
+  - op: monitor.system_services
+    path: /logs/system/services
+    module: monitor
+    risk: read
+    desc: {zh: 列出主机上正在运行的服务, en: List running host services}
+  - op: monitor.system_log_status
+    path: /logs/system/status
+    module: monitor
+    risk: read
+    desc: {zh: 查主机系统日志的采集状态, en: Get host system log status}
+  - op: monitor.alerts
+    path: /alert/search
+    module: monitor
+    risk: read
+    desc: {zh: 分页列出告警任务, en: Page alerts}
+  - op: monitor.alert_create
+    path: /alert
+    module: monitor
+    risk: write
+    desc: {zh: 创建告警任务, en: Create alert}
+  - op: monitor.alert_update
+    path: /alert/update
+    module: monitor
+    risk: write
+    desc: {zh: 修改告警任务, en: Update alert}
+  - op: monitor.alert_status
+    path: /alert/status
+    module: monitor
+    risk: write
+    desc: {zh: 启用或停用告警任务, en: Toggle alert status}
+  - op: monitor.alert_delete
+    path: /alert/del
+    module: monitor
+    risk: destructive
+    desc: {zh: 删除告警任务, en: Delete alert}
+  - op: monitor.alert_logs
+    path: /alert/logs/search
+    module: monitor
+    risk: read
+    desc: {zh: 查告警记录, en: Page alert logs}
+  - op: monitor.alert_logs_clean
+    path: /alert/logs/clean
+    module: monitor
+    risk: destructive
+    desc: {zh: 清空告警记录, en: Clean alert logs}
+  - op: monitor.alert_configs
+    path: /alert/config/search
+    module: monitor
+    risk: read
+    desc: {zh: 列出告警通知渠道, en: Page alert configs}
+  - op: monitor.alert_config_info
+    path: /alert/config/info
+    module: monitor
+    risk: read
+    desc: {zh: 查一个告警通知渠道, en: Get alert config}
+  - op: monitor.alert_config_update
+    path: /alert/config/update
+    module: monitor
+    risk: write
+    desc: {zh: 修改告警通知渠道, en: Update alert config}
+  - op: monitor.alert_config_test
+    path: /alert/config/test
+    module: monitor
+    risk: write
+    desc: {zh: 发一条测试告警, en: Test alert config}
+  - op: monitor.alert_config_delete
+    path: /alert/config/del
+    module: monitor
+    risk: destructive
+    desc: {zh: 删除告警通知渠道, en: Delete alert config}
+  - op: monitor.alert_disks
+    path: /alert/disks/list
+    module: monitor
+    risk: read
+    desc: {zh: 列出可配置告警的磁盘, en: List disks for alerts}
+  - op: monitor.alert_cronjobs
+    path: /alert/cronjob/list
+    module: monitor
+    risk: read
+    desc: {zh: 列出可配置告警的计划任务, en: List cronjobs for alerts}
+  - op: monitor.alert_clams
+    path: /alert/clams/list
+    module: monitor
+    risk: read
+    desc: {zh: 列出可配置告警的病毒扫描任务, en: List clam scans for alerts}
+
+  # ========================= website（OpenResty 部分） =========================
+  - op: website.openresty_conf
+    path: /openresty
+    module: website
+    risk: read
+    desc: {zh: 读 OpenResty 全局配置, en: Load OpenResty conf}
+  - op: website.openresty_status
+    path: /openresty/status
+    module: website
+    risk: read
+    desc: {zh: 查 OpenResty 运行状态, en: Load OpenResty status}
+  - op: website.openresty_scope
+    path: /openresty/scope
+    module: website
+    risk: read
+    desc: {zh: 读 OpenResty 某一段配置, en: Load partial OpenResty conf}
+  - op: website.openresty_update
+    path: /openresty/update
+    module: website
+    risk: write
+    desc: {zh: 修改 OpenResty 全局配置, en: Update OpenResty conf}
+  - op: website.openresty_file
+    path: /openresty/file
+    module: website
+    risk: write
+    desc: {zh: 用整份文件覆盖 OpenResty 配置, en: Update OpenResty conf by file}
+  - op: website.openresty_https
+    path: /openresty/https
+    module: website
+    risk: write
+    desc: {zh: 开关默认 HTTPS, en: Operate default HTTPS}
+  - op: website.openresty_modules
+    path: /openresty/modules
+    module: website
+    risk: read
+    desc: {zh: 列出 OpenResty 模块, en: List OpenResty modules}
+  - op: website.openresty_modules_update
+    path: /openresty/modules/update
+    module: website
+    risk: write
+    desc: {zh: 启用或停用 OpenResty 模块，改完要重新构建, en: Update OpenResty modules}
+  - op: website.openresty_build
+    path: /openresty/build
+    module: website
+    risk: destructive
+    desc: {zh: 重新构建 OpenResty。过程中全站不可访问，耗时可达数分钟, en: Rebuild OpenResty}
+    noAlways: true
+
+  # ========================= system =========================
+  - op: system.groups
+    path: /groups/search
+    module: system
+    risk: read
+    desc: {zh: 列出分组（网站/主机/计划任务等的分组）, en: List groups}
+  - op: system.group_create
+    path: /groups
+    module: system
+    risk: write
+    desc: {zh: 创建分组, en: Create group}
+  - op: system.group_update
+    path: /groups/update
+    module: system
+    risk: write
+    desc: {zh: 修改分组, en: Update group}
+  - op: system.group_delete
+    path: /groups/del
+    module: system
+    risk: destructive
+    desc: {zh: 删除分组, en: Delete group}
+  - op: system.process_info
+    path: /process/{pid}
+    module: system
+    risk: read
+    desc: {zh: 按 pid 查进程信息, en: Get process info by pid}
+  - op: system.process_listening
+    path: /process/listening
+    module: system
+    risk: read
+    desc: {zh: 列出正在监听端口的进程, en: List listening processes}
+  - op: system.process_stop
+    path: /process/stop
+    module: system
+    risk: destructive
+    desc: {zh: 结束一个进程。杀错了可能让服务中断, en: Stop process}
+
+  # ========================= runtime =========================
+  - op: runtime.list
+    path: /runtimes/search
+    module: runtime
+    risk: read
+    desc: {zh: 分页列出运行环境（PHP/Node/Java/Go/Python）, en: Page runtimes}
+    fields: [id, name, type, version, status, port]
+  - op: runtime.get
+    path: /runtimes/:id
+    module: runtime
+    risk: read
+    desc: {zh: 按 id 查一个运行环境, en: Get runtime by id}
+  - op: runtime.create
+    path: /runtimes
+    module: runtime
+    risk: write
+    desc: {zh: 创建运行环境。异步执行，用 vipanel_task 查进度, en: Create runtime}
+  - op: runtime.update
+    path: /runtimes/update
+    module: runtime
+    risk: write
+    desc: {zh: 修改运行环境, en: Update runtime}
+  - op: runtime.remark
+    path: /runtimes/remark
+    module: runtime
+    risk: write
+    desc: {zh: 修改运行环境的备注, en: Update runtime remark}
+  - op: runtime.operate
+    path: /runtimes/operate
+    module: runtime
+    risk: write
+    desc: {zh: 启停或重建运行环境, en: Operate runtime}
+  - op: runtime.sync
+    path: /runtimes/sync
+    module: runtime
+    risk: write
+    desc: {zh: 同步运行环境的实际状态, en: Sync runtime status}
+  - op: runtime.delete_check
+    path: /runtimes/installed/delete/check/:id
+    module: runtime
+    risk: read
+    desc: {zh: 删除前检查有哪些网站在用它, en: Check before deleting runtime}
+  - op: runtime.delete
+    path: /runtimes/del
+    module: runtime
+    risk: destructive
+    desc: {zh: 删除运行环境，依赖它的网站会立刻不可用, en: Delete runtime}
+    noAlways: true
+  - op: runtime.php_conf
+    path: /runtimes/php/config/:id
+    module: runtime
+    risk: read
+    desc: {zh: 读 PHP 运行环境配置, en: Load PHP runtime conf}
+  - op: runtime.php_conf_file
+    path: /runtimes/php/file
+    module: runtime
+    risk: read
+    desc: {zh: 读 php.ini 原文, en: Get php conf file}
+  - op: runtime.php_conf_update
+    path: /runtimes/php/config
+    module: runtime
+    risk: write
+    desc: {zh: 修改 PHP 配置项, en: Update PHP conf}
+  - op: runtime.php_file_update
+    path: /runtimes/php/update
+    module: runtime
+    risk: write
+    desc: {zh: 覆写 php.ini, en: Update php.ini}
+  - op: runtime.php_fpm_conf
+    path: /runtimes/php/fpm/config/:id
+    module: runtime
+    risk: read
+    desc: {zh: 读 PHP-FPM 配置, en: Get PHP-FPM config}
+  - op: runtime.php_fpm_update
+    path: /runtimes/php/fpm/config
+    module: runtime
+    risk: write
+    desc: {zh: 修改 PHP-FPM 配置, en: Update PHP-FPM config}
+  - op: runtime.php_fpm_status
+    path: /runtimes/php/fpm/status/:id
+    module: runtime
+    risk: read
+    desc: {zh: 查 PHP-FPM 运行状态, en: Get PHP-FPM status}
+  - op: runtime.php_container
+    path: /runtimes/php/container/:id
+    module: runtime
+    risk: read
+    desc: {zh: 读 PHP 容器配置, en: Get PHP container config}
+  - op: runtime.php_container_update
+    path: /runtimes/php/container/update
+    module: runtime
+    risk: write
+    desc: {zh: 修改 PHP 容器配置，会重建容器, en: Update PHP container config}
+  - op: runtime.php_ext_installed
+    path: /runtimes/php/:id/extensions
+    module: runtime
+    risk: read
+    desc: {zh: 列出某个 PHP 环境已装的扩展, en: List installed PHP extensions}
+  - op: runtime.php_ext_list
+    path: /runtimes/php/extensions/search
+    module: runtime
+    risk: read
+    desc: {zh: 分页列出可用的 PHP 扩展, en: Page PHP extensions}
+  - op: runtime.php_ext_install
+    path: /runtimes/php/extensions/install
+    module: runtime
+    risk: write
+    desc: {zh: 安装 PHP 扩展，会重启 PHP, en: Install PHP extension}
+  - op: runtime.php_ext_uninstall
+    path: /runtimes/php/extensions/uninstall
+    module: runtime
+    risk: destructive
+    desc: {zh: 卸载 PHP 扩展，依赖它的站点可能立刻报错, en: Uninstall PHP extension}
+  - op: runtime.php_ext_group_create
+    path: /runtimes/php/extensions
+    module: runtime
+    risk: write
+    desc: {zh: 创建扩展分组, en: Create PHP extension group}
+  - op: runtime.php_ext_group_update
+    path: /runtimes/php/extensions/update
+    module: runtime
+    risk: write
+    desc: {zh: 修改扩展分组, en: Update PHP extension group}
+  - op: runtime.php_ext_group_delete
+    path: /runtimes/php/extensions/del
+    module: runtime
+    risk: destructive
+    desc: {zh: 删除扩展分组, en: Delete PHP extension group}
+  - op: runtime.node_modules
+    path: /runtimes/node/modules
+    module: runtime
+    risk: read
+    desc: {zh: 列出 Node 项目的依赖, en: List Node modules}
+  - op: runtime.node_modules_operate
+    path: /runtimes/node/modules/operate
+    module: runtime
+    risk: write
+    desc: {zh: 安装或删除 Node 依赖, en: Operate Node modules}
+  - op: runtime.node_scripts
+    path: /runtimes/node/package
+    module: runtime
+    risk: read
+    desc: {zh: 读 package.json 里的脚本, en: Get Node package scripts}
+  - op: runtime.supervisor_get
+    path: /runtimes/supervisor/process/:id
+    module: runtime
+    risk: read
+    desc: {zh: 查运行环境的 supervisor 守护进程, en: Get supervisor process}
+  - op: runtime.supervisor_operate
+    path: /runtimes/supervisor/process
+    module: runtime
+    risk: write
+    desc: {zh: 启停 supervisor 守护进程, en: Operate supervisor process}
+  - op: runtime.supervisor_file
+    path: /runtimes/supervisor/process/file
+    module: runtime
+    risk: write
+    desc: {zh: 读写 supervisor 配置文件, en: Operate supervisor process file}
+
+  # ========================= firewall =========================
+  - op: firewall.base
+    path: /hosts/firewall/base
+    module: firewall
+    risk: read
+    desc: {zh: 查防火墙类型与启用状态, en: Load firewall base info}
+  - op: firewall.rules
+    path: /hosts/firewall/search
+    module: firewall
+    risk: read
+    desc: {zh: 分页列出防火墙规则, en: Page firewall rules}
+    fields: [id, type, port, protocol, address, strategy, description]
+  - op: firewall.operate
+    path: /hosts/firewall/operate
+    module: firewall
+    risk: destructive
+    desc: {zh: 启停防火墙本身。关掉它这台机器的所有端口都会暴露, en: Start or stop the firewall}
+    noAlways: true
+  - op: firewall.port_rule
+    path: /hosts/firewall/port
+    module: firewall
+    risk: write
+    desc: {zh: 添加端口放行/拒绝规则, en: Create port rule}
+  - op: firewall.port_rule_update
+    path: /hosts/firewall/update/port
+    module: firewall
+    risk: write
+    desc: {zh: 修改端口规则, en: Update port rule}
+  - op: firewall.ip_rule
+    path: /hosts/firewall/ip
+    module: firewall
+    risk: write
+    desc: {zh: 添加 IP 黑白名单规则, en: Create IP rule}
+  - op: firewall.ip_rule_update
+    path: /hosts/firewall/update/addr
+    module: firewall
+    risk: write
+    desc: {zh: 修改 IP 规则, en: Update IP rule}
+  - op: firewall.forward
+    path: /hosts/firewall/forward
+    module: firewall
+    risk: write
+    desc: {zh: 配置端口转发, en: Operate port forwarding}
+  - op: firewall.rule_description
+    path: /hosts/firewall/update/description
+    module: firewall
+    risk: write
+    desc: {zh: 修改规则备注, en: Update rule description}
+  - op: firewall.batch
+    path: /hosts/firewall/batch
+    module: firewall
+    risk: destructive
+    desc: {zh: 批量增删防火墙规则。一次可能改掉很多条, en: Batch operate firewall rules}
+    noAlways: true
+  - op: firewall.iptables_status
+    path: /hosts/firewall/filter/chain/status
+    module: firewall
+    risk: read
+    desc: {zh: 查 iptables filter 链状态, en: Load iptables chain status}
+  - op: firewall.iptables_rules
+    path: /hosts/firewall/filter/rule/search
+    module: firewall
+    risk: read
+    desc: {zh: 列出 iptables filter 规则, en: Search iptables filter rules}
+  - op: firewall.iptables_operate
+    path: /hosts/firewall/filter/operate
+    module: firewall
+    risk: destructive
+    desc: {zh: 启用/卸载/初始化 iptables filter。操作不当会把自己关在门外, en: Apply or unload iptables filter}
+    noAlways: true
+  - op: firewall.iptables_rule
+    path: /hosts/firewall/filter/rule/operate
+    module: firewall
+    risk: write
+    desc: {zh: 增删一条 iptables filter 规则, en: Operate iptables filter rule}
+  - op: firewall.iptables_rule_batch
+    path: /hosts/firewall/filter/rule/batch
+    module: firewall
+    risk: destructive
+    desc: {zh: 批量增删 iptables filter 规则, en: Batch operate iptables filter rules}
+    noAlways: true
+
+  # ========================= ssh =========================
+  - op: ssh.setting
+    path: /hosts/ssh/search
+    module: ssh
+    risk: read
+    desc: {zh: 查 SSH 服务配置（端口、root 登录、密码登录等）, en: Load SSH setting}
+  - op: ssh.conf_file
+    path: /hosts/ssh/file
+    module: ssh
+    risk: read
+    desc: {zh: 读 sshd_config 原文, en: Load sshd_config}
+  - op: ssh.update
+    path: /hosts/ssh/update
+    module: ssh
+    risk: destructive
+    desc: {zh: 改 SSH 配置。改错端口或禁用登录方式会让你再也连不上这台机器, en: Update SSH setting}
+    noAlways: true
+  - op: ssh.conf_file_update
+    path: /hosts/ssh/file/update
+    module: ssh
+    risk: destructive
+    desc: {zh: 覆写 sshd_config。写坏了会让你再也连不上这台机器, en: Update sshd_config by file}
+    noAlways: true
+  - op: ssh.operate
+    path: /hosts/ssh/operate
+    module: ssh
+    risk: destructive
+    desc: {zh: 启停或重启 SSH 服务。停掉后只能靠物理/云控制台进机器, en: Operate SSH service}
+    noAlways: true
+  - op: ssh.certs
+    path: /hosts/ssh/cert/search
+    module: ssh
+    risk: read
+    desc: {zh: 列出 SSH 密钥, en: List SSH keys}
+  - op: ssh.cert_create
+    path: /hosts/ssh/cert
+    module: ssh
+    risk: write
+    desc: {zh: 生成 SSH 密钥, en: Generate SSH key}
+  - op: ssh.cert_update
+    path: /hosts/ssh/cert/update
+    module: ssh
+    risk: write
+    desc: {zh: 更新 SSH 密钥, en: Update SSH key}
+  - op: ssh.cert_sync
+    path: /hosts/ssh/cert/sync
+    module: ssh
+    risk: write
+    desc: {zh: 同步 SSH 密钥到 authorized_keys, en: Sync SSH key}
+  - op: ssh.cert_delete
+    path: /hosts/ssh/cert/delete
+    module: ssh
+    risk: destructive
+    desc: {zh: 删除 SSH 密钥，用它登录的人会立刻进不来, en: Delete SSH key}
+    noAlways: true
+  - op: ssh.logs
+    path: /hosts/ssh/log
+    module: ssh
+    risk: read
+    desc: {zh: 查 SSH 登录日志, en: Load SSH logs}
+  - op: ssh.logs_export
+    path: /hosts/ssh/log/export
+    module: ssh
+    risk: read
+    desc: {zh: 导出 SSH 登录日志, en: Export SSH logs}
+  - op: ssh.logs_clean
+    path: /hosts/ssh/log/clean
+    module: ssh
+    risk: destructive
+    desc: {zh: 清空 SSH 登录日志。这是审计痕迹，清掉不可恢复, en: Clean SSH logs}
+    noAlways: true
+
+  # ========================= system（主机、磁盘、监控数据） =========================
+  - op: system.hosts
+    path: /hosts/search
+    module: system
+    risk: read
+    desc: {zh: 分页列出已保存的远程主机, en: Page saved hosts}
+    fields: [id, name, addr, port, user, groupBelong]
+  - op: system.host_info
+    path: /hosts/info
+    module: system
+    risk: read
+    desc: {zh: 按 id 查一台远程主机, en: Get host by id}
+  - op: system.host_tree
+    path: /hosts/tree
+    module: system
+    risk: read
+    desc: {zh: 按分组列出远程主机, en: Host tree}
+  - op: system.host_create
+    path: /hosts
+    module: system
+    risk: write
+    desc: {zh: 添加远程主机, en: Create host}
+  - op: system.host_update
+    path: /hosts/update
+    module: system
+    risk: write
+    desc: {zh: 修改远程主机, en: Update host}
+  - op: system.host_group
+    path: /hosts/update/group
+    module: system
+    risk: write
+    desc: {zh: 修改远程主机的分组, en: Update host group}
+  - op: system.host_test
+    path: /hosts/test/byid
+    module: system
+    risk: read
+    desc: {zh: 测试已保存主机的连通性, en: Test saved host connectivity}
+  - op: system.host_test_info
+    path: /hosts/test/byinfo
+    module: system
+    risk: read
+    desc: {zh: 用给定的连接信息测试连通性, en: Test host connectivity by info}
+  - op: system.host_delete
+    path: /hosts/del
+    module: system
+    risk: destructive
+    desc: {zh: 删除已保存的远程主机, en: Delete host}
+  - op: system.component_check
+    path: /hosts/components/{name}
+    module: system
+    risk: read
+    desc: {zh: 检查某个系统组件在不在, en: Check system component}
+  - op: system.disks
+    path: /hosts/disks
+    module: system
+    risk: read
+    desc: {zh: 查磁盘、分区与挂载信息, en: Get disk information}
+  - op: system.disk_mount
+    path: /hosts/disks/mount
+    module: system
+    risk: write
+    desc: {zh: 挂载磁盘, en: Mount disk}
+  - op: system.disk_unmount
+    path: /hosts/disks/unmount
+    module: system
+    risk: destructive
+    desc: {zh: 卸载磁盘。上面的数据会立刻不可访问, en: Unmount disk}
+    noAlways: true
+  - op: system.disk_partition
+    path: /hosts/disks/partition
+    module: system
+    risk: destructive
+    desc: {zh: 给磁盘分区并格式化。**磁盘上原有数据全部丢失**，不可恢复, en: Partition and format disk}
+    noAlways: true
+  - op: system.monitor_data
+    path: /hosts/monitor/search
+    module: system
+    risk: read
+    desc: {zh: 查历史监控数据, en: Load monitor data}
+  - op: system.monitor_setting
+    path: /hosts/monitor/setting
+    module: system
+    risk: read
+    desc: {zh: 查监控采集设置, en: Load monitor setting}
+  - op: system.monitor_setting_update
+    path: /hosts/monitor/setting/update
+    module: system
+    risk: write
+    desc: {zh: 修改监控采集设置, en: Update monitor setting}
+  - op: system.monitor_io_options
+    path: /hosts/monitor/iooptions
+    module: system
+    risk: read
+    desc: {zh: 列出可选的磁盘 IO 采集对象, en: Get IO options}
+  - op: system.monitor_net_options
+    path: /hosts/monitor/netoptions
+    module: system
+    risk: read
+    desc: {zh: 列出可选的网卡, en: Get network options}
+  - op: system.monitor_clean
+    path: /hosts/monitor/clean
+    module: system
+    risk: destructive
+    desc: {zh: 清空历史监控数据，不可恢复, en: Clean monitor data}
+  - op: system.diagnostics
+    path: /hosts/diagnostics/summary
+    module: system
+    risk: read
+    desc: {zh: 查面板自身的运行时诊断摘要, en: Load runtime diagnostics summary}
+  - op: system.goroutines
+    path: /hosts/diagnostics/goroutines
+    module: system
+    risk: read
+    desc: {zh: 查面板自身的 goroutine 快照, en: Load goroutine snapshot}
+  - op: system.profile
+    path: /hosts/diagnostics/profiles
+    module: system
+    risk: write
+    desc: {zh: 采一份面板自身的性能剖析, en: Capture runtime profile}
+
+  # ========================= toolbox（主机工具） =========================
+  - op: toolbox.tool_status
+    path: /hosts/tool/status
+    module: toolbox
+    risk: read
+    desc: {zh: 查主机工具（supervisor 等）的状态, en: Get host tool status}
+  - op: toolbox.tool_config
+    path: /hosts/tool/config/get
+    module: toolbox
+    risk: read
+    desc: {zh: 读主机工具的配置, en: Get host tool config}
+  - op: toolbox.tool_config_set
+    path: /hosts/tool/config/set
+    module: toolbox
+    risk: write
+    desc: {zh: 修改主机工具的配置, en: Update host tool config}
+  - op: toolbox.tool_init
+    path: /hosts/tool/init
+    module: toolbox
+    risk: write
+    desc: {zh: 初始化主机工具, en: Init host tool}
+  - op: toolbox.tool_operate
+    path: /hosts/tool/operate
+    module: toolbox
+    risk: write
+    desc: {zh: 启停主机工具, en: Operate host tool}
+  - op: toolbox.supervisor_process
+    path: /hosts/tool/supervisor/process
+    module: toolbox
+    risk: write
+    desc: {zh: 增删或启停 supervisor 守护进程, en: Operate supervisor process}
+  - op: toolbox.supervisor_file
+    path: /hosts/tool/supervisor/process/file
+    module: toolbox
+    risk: write
+    desc: {zh: 读写 supervisor 进程配置文件, en: Operate supervisor process file}
+  - op: toolbox.supervisor_file_get
+    path: /hosts/tool/supervisor/process/file/get
+    module: toolbox
+    risk: read
+    desc: {zh: 读 supervisor 进程配置文件, en: Get supervisor process file}
+
+  # ========================= toolbox =========================
+  - op: toolbox.scan
+    path: /toolbox/scan
+    module: toolbox
+    risk: read
+    desc: {zh: 扫描系统里可清理的垃圾文件，只统计不删, en: Scan system junk files}
+  - op: toolbox.clean
+    path: /toolbox/clean
+    module: toolbox
+    risk: destructive
+    desc: {zh: 清理系统垃圾文件。按选中的项直接删除，不可恢复, en: Clean system junk files}
+    noAlways: true
+  - op: toolbox.device_base
+    path: /toolbox/device/base
+    module: toolbox
+    risk: read
+    desc: {zh: 查主机基础参数（时区、hostname、swap、DNS 等）, en: Load device base info}
+  - op: toolbox.device_conf
+    path: /toolbox/device/conf
+    module: toolbox
+    risk: read
+    desc: {zh: 读主机配置文件（hosts / resolv.conf 等）, en: Load device conf file}
+  - op: toolbox.device_users
+    path: /toolbox/device/users
+    module: toolbox
+    risk: read
+    desc: {zh: 列出系统用户, en: List system users}
+  - op: toolbox.device_zones
+    path: /toolbox/device/zone/options
+    module: toolbox
+    risk: read
+    desc: {zh: 列出可选时区, en: List time zone options}
+  - op: toolbox.device_dns_check
+    path: /toolbox/device/check/dns
+    module: toolbox
+    risk: read
+    desc: {zh: 检查 DNS 配置是否可用, en: Check device DNS conf}
+  - op: toolbox.device_update
+    path: /toolbox/device/update/conf
+    module: toolbox
+    risk: write
+    desc: {zh: 修改主机参数（时区、hostname 等）, en: Update device parameter}
+  - op: toolbox.device_hosts
+    path: /toolbox/device/update/host
+    module: toolbox
+    risk: write
+    desc: {zh: 修改 /etc/hosts, en: Update /etc/hosts}
+  - op: toolbox.device_conf_update
+    path: /toolbox/device/update/byconf
+    module: toolbox
+    risk: destructive
+    desc: {zh: 用整份文件覆盖主机配置（DNS / hosts 等）。写坏会影响整机网络, en: Update device conf by file}
+    noAlways: true
+  - op: toolbox.device_swap
+    path: /toolbox/device/update/swap
+    module: toolbox
+    risk: write
+    desc: {zh: 启用或调整 swap, en: Update device swap}
+  - op: toolbox.device_passwd
+    path: /toolbox/device/update/passwd
+    module: toolbox
+    risk: destructive
+    desc: {zh: 修改系统用户密码。改错会让人登不上这台机器, en: Update system user password}
+    noAlways: true
+  - op: toolbox.fail2ban_base
+    path: /toolbox/fail2ban/base
+    module: toolbox
+    risk: read
+    desc: {zh: 查 Fail2ban 状态, en: Load fail2ban base info}
+  - op: toolbox.fail2ban_conf
+    path: /toolbox/fail2ban/load/conf
+    module: toolbox
+    risk: read
+    desc: {zh: 读 Fail2ban 配置, en: Load fail2ban conf}
+  - op: toolbox.fail2ban_list
+    path: /toolbox/fail2ban/search
+    module: toolbox
+    risk: read
+    desc: {zh: 列出被 Fail2ban 封禁的 IP, en: Page fail2ban IP list}
+  - op: toolbox.fail2ban_update
+    path: /toolbox/fail2ban/update
+    module: toolbox
+    risk: write
+    desc: {zh: 修改 Fail2ban 配置, en: Update fail2ban conf}
+  - op: toolbox.fail2ban_conf_update
+    path: /toolbox/fail2ban/update/byconf
+    module: toolbox
+    risk: write
+    desc: {zh: 用整份文件覆盖 Fail2ban 配置, en: Update fail2ban conf by file}
+  - op: toolbox.fail2ban_operate
+    path: /toolbox/fail2ban/operate
+    module: toolbox
+    risk: write
+    desc: {zh: 启停 Fail2ban, en: Operate fail2ban}
+  - op: toolbox.fail2ban_sshd
+    path: /toolbox/fail2ban/operate/sshd
+    module: toolbox
+    risk: write
+    desc: {zh: 开关 Fail2ban 对 SSH 的防护, en: Toggle fail2ban sshd jail}
+  - op: toolbox.ftp_base
+    path: /toolbox/ftp/base
+    module: toolbox
+    risk: read
+    desc: {zh: 查 FTP 服务状态, en: Load FTP base info}
+  - op: toolbox.ftp_users
+    path: /toolbox/ftp/search
+    module: toolbox
+    risk: read
+    desc: {zh: 分页列出 FTP 账户, en: Page FTP users}
+  - op: toolbox.ftp_logs
+    path: /toolbox/ftp/log/search
+    module: toolbox
+    risk: read
+    desc: {zh: 查 FTP 操作日志, en: Load FTP logs}
+  - op: toolbox.ftp_create
+    path: /toolbox/ftp
+    module: toolbox
+    risk: write
+    desc: {zh: 创建 FTP 账户, en: Create FTP user}
+  - op: toolbox.ftp_update
+    path: /toolbox/ftp/update
+    module: toolbox
+    risk: write
+    desc: {zh: 修改 FTP 账户, en: Update FTP user}
+  - op: toolbox.ftp_sync
+    path: /toolbox/ftp/sync
+    module: toolbox
+    risk: write
+    desc: {zh: 同步 FTP 账户, en: Sync FTP users}
+  - op: toolbox.ftp_operate
+    path: /toolbox/ftp/operate
+    module: toolbox
+    risk: write
+    desc: {zh: 启停 FTP 服务, en: Operate FTP service}
+  - op: toolbox.ftp_delete
+    path: /toolbox/ftp/del
+    module: toolbox
+    risk: destructive
+    desc: {zh: 删除 FTP 账户, en: Delete FTP user}
+  - op: toolbox.clam_base
+    path: /toolbox/clam/base
+    module: toolbox
+    risk: read
+    desc: {zh: 查病毒扫描服务状态, en: Load ClamAV base info}
+  - op: toolbox.clam_list
+    path: /toolbox/clam/search
+    module: toolbox
+    risk: read
+    desc: {zh: 分页列出扫描规则, en: Page ClamAV rules}
+  - op: toolbox.clam_records
+    path: /toolbox/clam/record/search
+    module: toolbox
+    risk: read
+    desc: {zh: 查扫描报告, en: Page ClamAV scan records}
+  - op: toolbox.clam_file
+    path: /toolbox/clam/file/search
+    module: toolbox
+    risk: read
+    desc: {zh: 读 ClamAV 配置文件, en: Load ClamAV config file}
+  - op: toolbox.clam_file_update
+    path: /toolbox/clam/file/update
+    module: toolbox
+    risk: write
+    desc: {zh: 修改 ClamAV 配置文件, en: Update ClamAV config file}
+  - op: toolbox.clam_create
+    path: /toolbox/clam
+    module: toolbox
+    risk: write
+    desc: {zh: 创建扫描规则, en: Create ClamAV rule}
+  - op: toolbox.clam_update
+    path: /toolbox/clam/update
+    module: toolbox
+    risk: write
+    desc: {zh: 修改扫描规则, en: Update ClamAV rule}
+  - op: toolbox.clam_status
+    path: /toolbox/clam/status/update
+    module: toolbox
+    risk: write
+    desc: {zh: 启用或停用扫描规则, en: Toggle ClamAV rule status}
+  - op: toolbox.clam_run
+    path: /toolbox/clam/handle
+    module: toolbox
+    risk: write
+    desc: {zh: 立刻执行一次病毒扫描, en: Run ClamAV scan now}
+  - op: toolbox.clam_operate
+    path: /toolbox/clam/operate
+    module: toolbox
+    risk: write
+    desc: {zh: 启停 ClamAV 服务, en: Operate ClamAV service}
+  - op: toolbox.clam_delete
+    path: /toolbox/clam/del
+    module: toolbox
+    risk: destructive
+    desc: {zh: 删除扫描规则, en: Delete ClamAV rule}
+  - op: toolbox.clam_record_clean
+    path: /toolbox/clam/record/clean
+    module: toolbox
+    risk: destructive
+    desc: {zh: 清空扫描报告, en: Clean ClamAV records}
+
+  # ========================= setting =========================
+  - op: setting.get
+    path: /settings/search
+    module: setting
+    risk: read
+    desc: {zh: 查面板系统设置, en: Load panel settings}
+  - op: setting.available
+    path: /settings/search/available
+    module: setting
+    risk: read
+    desc: {zh: 查面板可用状态, en: Load panel available status}
+  - op: setting.update
+    path: /settings/update
+    module: setting
+    risk: destructive
+    desc: {zh: 修改面板系统设置。端口、安全入口、超时这些改错会让你登不进面板, en: Update panel setting}
+    noAlways: true
+  - op: setting.base_dir
+    path: /settings/basedir
+    module: setting
+    risk: read
+    desc: {zh: 查面板的数据目录, en: Load panel base dir}
+  - op: setting.website_dir
+    path: /settings/website/dir
+    module: setting
+    risk: read
+    desc: {zh: 查建站根目录, en: Load website root dir}
+  - op: setting.description_save
+    path: /settings/description/save
+    module: setting
+    risk: write
+    desc: {zh: 保存通用备注, en: Save common description}
+  - op: setting.file_history
+    path: /settings/file-history/search
+    module: setting
+    risk: read
+    desc: {zh: 查文件历史版本设置, en: Load file history setting}
+  - op: setting.file_history_update
+    path: /settings/file-history/update
+    module: setting
+    risk: write
+    desc: {zh: 修改文件历史版本设置, en: Update file history setting}
+  - op: setting.files_ai
+    path: /settings/files/ai/search
+    module: setting
+    risk: read
+    desc: {zh: 查文件管理的 AI 设置, en: Load file manager AI setting}
+  - op: setting.files_ai_update
+    path: /settings/files/ai/update
+    module: setting
+    risk: write
+    desc: {zh: 修改文件管理的 AI 设置, en: Update file manager AI setting}
+  - op: setting.terminal_ai
+    path: /settings/terminal/ai/search
+    module: setting
+    risk: read
+    desc: {zh: 查终端的 AI 设置, en: Load terminal AI setting}
+  - op: setting.terminal_ai_update
+    path: /settings/terminal/ai/update
+    module: setting
+    risk: write
+    desc: {zh: 修改终端的 AI 设置, en: Update terminal AI setting}
+  - op: setting.local_conn
+    path: /settings/ssh/conn
+    module: setting
+    risk: read
+    desc: {zh: 查面板本地终端的连接信息, en: Load local terminal conn}
+  - op: setting.local_conn_check
+    path: /settings/ssh/check
+    module: setting
+    risk: read
+    desc: {zh: 测试面板本地终端连通性, en: Check local terminal conn}
+  - op: setting.local_conn_check_info
+    path: /settings/ssh/check/info
+    module: setting
+    risk: read
+    desc: {zh: 用给定信息测试本地终端连通性, en: Check local conn by info}
+  - op: setting.local_conn_save
+    path: /settings/ssh
+    module: setting
+    risk: write
+    desc: {zh: 保存面板本地终端的连接信息, en: Save local terminal conn}
+  - op: setting.local_conn_default
+    path: /settings/ssh/default
+    module: setting
+    risk: write
+    desc: {zh: 设置本地终端的默认连接方式, en: Set default local terminal conn}
+  - op: setting.snapshots
+    path: /settings/snapshot/search
+    module: setting
+    risk: read
+    desc: {zh: 分页列出系统快照, en: Page system snapshots}
+    fields: [id, name, from, status, description, createdAt]
+  - op: setting.snapshot_load
+    path: /settings/snapshot/load
+    module: setting
+    risk: read
+    desc: {zh: 查快照的详细数据, en: Load snapshot data}
+  - op: setting.snapshot_create
+    path: /settings/snapshot
+    module: setting
+    risk: write
+    desc: {zh: 创建系统快照。异步执行，用 vipanel_task 查进度, en: Create system snapshot}
+  - op: setting.snapshot_recreate
+    path: /settings/snapshot/recreate
+    module: setting
+    risk: write
+    desc: {zh: 重试一个失败的快照, en: Recreate failed snapshot}
+  - op: setting.snapshot_description
+    path: /settings/snapshot/description/update
+    module: setting
+    risk: write
+    desc: {zh: 修改快照备注, en: Update snapshot description}
+  - op: setting.snapshot_import
+    path: /settings/snapshot/import
+    module: setting
+    risk: write
+    desc: {zh: 从备份账号导入快照记录, en: Import system snapshot}
+  - op: setting.snapshot_recover
+    path: /settings/snapshot/recover
+    module: setting
+    risk: destructive
+    desc: {zh: 用快照恢复整个面板。当前所有数据被替换，面板会重启, en: Recover panel from snapshot}
+    noAlways: true
+  - op: setting.snapshot_rollback
+    path: /settings/snapshot/rollback
+    module: setting
+    risk: destructive
+    desc: {zh: 回滚到快照恢复之前的状态，面板会重启, en: Rollback snapshot recovery}
+    noAlways: true
+  - op: setting.snapshot_delete
+    path: /settings/snapshot/del
+    module: setting
+    risk: destructive
+    desc: {zh: 删除系统快照，不可恢复, en: Delete system snapshot}
+    noAlways: true
+
+  # ========================= ai =========================
+  # 模型账号
+  - op: ai.providers
+    path: /ai/accounts/providers
+    module: ai
+    risk: read
+    desc: {zh: 列出支持的模型服务商, en: List model providers}
+  - op: ai.accounts
+    path: /ai/accounts/search
+    module: ai
+    risk: read
+    desc: {zh: 分页列出模型账号, en: Page model accounts}
+    fields: [id, name, provider, apiType, verified, baseURL]
+  - op: ai.account_counts
+    path: /ai/accounts/counts
+    module: ai
+    risk: read
+    desc: {zh: 按服务商统计模型账号数量, en: Count accounts by provider}
+  - op: ai.account_create
+    path: /ai/accounts
+    module: ai
+    risk: write
+    desc: {zh: 添加模型账号（含 API Key）, en: Create model account}
+    noAlways: true
+  - op: ai.account_update
+    path: /ai/accounts/update
+    module: ai
+    risk: write
+    desc: {zh: 修改模型账号, en: Update model account}
+    noAlways: true
+  - op: ai.account_verify
+    path: /ai/accounts/verify
+    module: ai
+    risk: write
+    desc: {zh: 校验模型账号可用性。会真的调一次模型接口, en: Verify model account}
+  - op: ai.account_delete
+    path: /ai/accounts/delete
+    module: ai
+    risk: destructive
+    desc: {zh: 删除模型账号，用它的 agent 会立刻不可用, en: Delete model account}
+    noAlways: true
+  - op: ai.account_models
+    path: /ai/accounts/models
+    module: ai
+    risk: read
+    desc: {zh: 列出模型账号下配置的模型, en: List models of an account}
+  - op: ai.account_models_discover
+    path: /ai/accounts/models/discover
+    module: ai
+    risk: read
+    desc: {zh: 向服务商查询可用模型列表, en: Discover provider models}
+  - op: ai.account_model_create
+    path: /ai/accounts/models/create
+    module: ai
+    risk: write
+    desc: {zh: 给模型账号添加一个模型, en: Create account model}
+  - op: ai.account_model_update
+    path: /ai/accounts/models/update
+    module: ai
+    risk: write
+    desc: {zh: 修改模型账号下的模型, en: Update account model}
+  - op: ai.account_model_delete
+    path: /ai/accounts/models/delete
+    module: ai
+    risk: destructive
+    desc: {zh: 删除模型账号下的模型, en: Delete account model}
+
+  # agents（上游的容器化 agent）
+  - op: ai.agents
+    path: /ai/agents/search
+    module: ai
+    risk: read
+    desc: {zh: 分页列出 AI Agent 实例, en: Page AI agents}
+    fields: [id, name, agentType, status, webUIPort, model]
+  - op: ai.agent_overview
+    path: /ai/agents/overview
+    module: ai
+    risk: read
+    desc: {zh: 查 Agent 概览, en: Get agent overview}
+  - op: ai.agent_create
+    path: /ai/agents
+    module: ai
+    risk: write
+    desc:
+      zh: >-
+        创建一个 AI Agent 实例。它会起一个容器，并把你的模型 API Key 注入进去——这意味着开始花钱。
+      en: Create an AI agent (starts a container and injects your model API key)
+    noAlways: true
+  - op: ai.agent_remark
+    path: /ai/agents/remark
+    module: ai
+    risk: write
+    desc: {zh: 修改 Agent 备注, en: Update agent remark}
+  - op: ai.agent_batch_install
+    path: /ai/agents/batch/install
+    module: ai
+    risk: write
+    desc: {zh: 批量安装 Agent。会同时起多个容器并消耗模型额度, en: Batch install agents}
+    noAlways: true
+  - op: ai.agent_batch_upgrade
+    path: /ai/agents/batch/upgrade
+    module: ai
+    risk: write
+    desc: {zh: 批量升级 Agent, en: Batch upgrade agents}
+  - op: ai.agent_batch_operate
+    path: /ai/agents/batch/operate
+    module: ai
+    risk: write
+    desc: {zh: 批量启停 Agent, en: Batch operate agents}
+  - op: ai.agent_delete_check
+    path: /ai/agents/delete/check
+    module: ai
+    risk: read
+    desc: {zh: 删除 Agent 前检查关联资源, en: Check before deleting agent}
+  - op: ai.agent_delete
+    path: /ai/agents/delete
+    module: ai
+    risk: destructive
+    desc: {zh: 删除 AI Agent 实例及其容器和配置，不可恢复, en: Delete AI agent}
+    noAlways: true
+  - op: ai.agent_token_reset
+    path: /ai/agents/token/reset
+    module: ai
+    risk: destructive
+    desc: {zh: 重置 Agent 的访问令牌，正在用旧令牌的客户端会立刻失效, en: Reset agent token}
+    noAlways: true
+  - op: ai.agent_model_get
+    path: /ai/agents/model/get
+    module: ai
+    risk: read
+    desc: {zh: 查 Agent 的模型配置, en: Get agent model config}
+  - op: ai.agent_model_update
+    path: /ai/agents/model/update
+    module: ai
+    risk: write
+    desc: {zh: 修改 Agent 的模型配置。换模型会改变花钱的速度, en: Update agent model config}
+    noAlways: true
+  - op: ai.agent_config_get
+    path: /ai/agents/config-file/get
+    module: ai
+    risk: read
+    desc: {zh: 读 Agent 的配置文件, en: Get agent config file}
+  - op: ai.agent_config_update
+    path: /ai/agents/config-file/update
+    module: ai
+    risk: write
+    desc: {zh: 覆写 Agent 的配置文件, en: Update agent config file}
+  - op: ai.agent_security_get
+    path: /ai/agents/security/get
+    module: ai
+    risk: read
+    desc: {zh: 查 Agent 的安全设置, en: Get agent security config}
+  - op: ai.agent_security_update
+    path: /ai/agents/security/update
+    module: ai
+    risk: destructive
+    desc: {zh: 修改 Agent 的安全设置。放宽它等于给那个 agent 更大的权力, en: Update agent security config}
+    noAlways: true
+  - op: ai.agent_other_get
+    path: /ai/agents/other/get
+    module: ai
+    risk: read
+    desc: {zh: 查 Agent 的其他设置, en: Get agent other config}
+  - op: ai.agent_other_update
+    path: /ai/agents/other/update
+    module: ai
+    risk: write
+    desc: {zh: 修改 Agent 的其他设置, en: Update agent other config}
+  - op: ai.agent_website_bind
+    path: /ai/agents/website/bind
+    module: ai
+    risk: write
+    desc: {zh: 给 Agent 绑定访问域名, en: Bind agent website}
+  - op: ai.agent_website_unbind
+    path: /ai/agents/website/unbind
+    module: ai
+    risk: write
+    desc: {zh: 解绑 Agent 的访问域名, en: Unbind agent website}
+  - op: ai.agent_roles
+    path: /ai/agents/agent/list
+    module: ai
+    risk: read
+    desc: {zh: 列出 Agent 里配置的角色, en: List agent roles}
+  - op: ai.agent_role_create
+    path: /ai/agents/agent/create
+    module: ai
+    risk: write
+    desc: {zh: 创建 Agent 角色, en: Create agent role}
+  - op: ai.agent_role_delete
+    path: /ai/agents/agent/delete
+    module: ai
+    risk: destructive
+    desc: {zh: 删除 Agent 角色, en: Delete agent role}
+  - op: ai.agent_role_bind
+    path: /ai/agents/agent/bind
+    module: ai
+    risk: write
+    desc: {zh: 把角色绑到一个消息渠道, en: Bind agent role to channel}
+  - op: ai.agent_role_unbind
+    path: /ai/agents/agent/unbind
+    module: ai
+    risk: write
+    desc: {zh: 解绑角色与消息渠道, en: Unbind agent role from channel}
+  - op: ai.agent_role_channels
+    path: /ai/agents/agent/channels
+    module: ai
+    risk: read
+    desc: {zh: 列出角色可用的消息渠道, en: List agent role channels}
+  - op: ai.agent_role_md_list
+    path: /ai/agents/agent/md/list
+    module: ai
+    risk: read
+    desc: {zh: 列出角色的提示词文件, en: List agent role markdown files}
+  - op: ai.agent_role_md_update
+    path: /ai/agents/agent/md/update
+    module: ai
+    risk: write
+    desc: {zh: 修改角色的提示词文件, en: Update agent role markdown file}
+  - op: ai.agent_skills
+    path: /ai/agents/skills/list
+    module: ai
+    risk: read
+    desc: {zh: 列出 Agent 已装的技能, en: List agent skills}
+  - op: ai.agent_skills_search
+    path: /ai/agents/skills/search
+    module: ai
+    risk: read
+    desc: {zh: 搜索可安装的技能, en: Search agent skills}
+  - op: ai.agent_skill_install
+    path: /ai/agents/skills/install
+    module: ai
+    risk: write
+    desc: {zh: 给 Agent 安装技能, en: Install agent skill}
+  - op: ai.agent_skill_batch_install
+    path: /ai/agents/batch/skill/install
+    module: ai
+    risk: write
+    desc: {zh: 批量给多个 Agent 安装技能, en: Batch install agent skills}
+  - op: ai.agent_skill_update
+    path: /ai/agents/skills/update
+    module: ai
+    risk: write
+    desc: {zh: 启用或停用 Agent 技能, en: Toggle agent skill}
+  - op: ai.agent_skill_uninstall
+    path: /ai/agents/skills/uninstall
+    module: ai
+    risk: destructive
+    desc: {zh: 卸载 Agent 技能, en: Uninstall agent skill}
+  - op: ai.agent_plugins
+    path: /ai/agents/plugins/list
+    module: ai
+    risk: read
+    desc: {zh: 列出 Agent 已装的插件, en: List agent plugins}
+  - op: ai.agent_plugins_search
+    path: /ai/agents/plugins/search
+    module: ai
+    risk: read
+    desc: {zh: 搜索插件市场, en: Search agent plugins}
+  - op: ai.agent_plugin_check
+    path: /ai/agents/plugin/check
+    module: ai
+    risk: read
+    desc: {zh: 查一个插件的安装状态, en: Check agent plugin status}
+  - op: ai.agent_plugin_install
+    path: /ai/agents/plugin/install
+    module: ai
+    risk: write
+    desc: {zh: 安装 Agent 插件, en: Install agent plugin}
+  - op: ai.agent_plugin_market_install
+    path: /ai/agents/plugins/install
+    module: ai
+    risk: write
+    desc: {zh: 从插件市场安装插件, en: Install marketplace plugin}
+  - op: ai.agent_plugin_operate
+    path: /ai/agents/plugins/operate
+    module: ai
+    risk: write
+    desc: {zh: 启停 Agent 插件, en: Operate agent plugin}
+  - op: ai.agent_plugin_upgrade
+    path: /ai/agents/plugin/upgrade
+    module: ai
+    risk: write
+    desc: {zh: 升级 Agent 插件, en: Upgrade agent plugin}
+  - op: ai.agent_plugin_uninstall
+    path: /ai/agents/plugin/uninstall
+    module: ai
+    risk: destructive
+    desc: {zh: 卸载 Agent 插件, en: Uninstall agent plugin}
+  - op: ai.agent_chat_sessions
+    path: /ai/agents/hermes/chat/sessions
+    module: ai
+    risk: read
+    desc: {zh: 列出 Agent 的对话会话, en: List agent chat sessions}
+  - op: ai.agent_chat_rename
+    path: /ai/agents/hermes/chat/sessions/rename
+    module: ai
+    risk: write
+    desc: {zh: 重命名 Agent 的对话会话, en: Rename agent chat session}
+  - op: ai.agent_chat_delete
+    path: /ai/agents/hermes/chat/sessions/delete
+    module: ai
+    risk: destructive
+    desc: {zh: 删除 Agent 的对话会话，聊天记录一并消失, en: Delete agent chat session}
+
+  # Ollama
+  - op: ai.ollama_models
+    path: /ai/ollama/model/search
+    module: ai
+    risk: read
+    desc: {zh: 分页列出 Ollama 模型, en: Page Ollama models}
+    fields: [id, name, size, status, from]
+  - op: ai.ollama_model_detail
+    path: /ai/ollama/model/load
+    module: ai
+    risk: read
+    desc: {zh: 查一个 Ollama 模型的详情, en: Load Ollama model detail}
+  - op: ai.ollama_model_add
+    path: /ai/ollama/model
+    module: ai
+    risk: write
+    desc: {zh: 拉取一个 Ollama 模型。模型动辄几 GB，会占磁盘和带宽, en: Pull Ollama model}
+  - op: ai.ollama_model_recreate
+    path: /ai/ollama/model/recreate
+    module: ai
+    risk: write
+    desc: {zh: 重试拉取失败的 Ollama 模型, en: Retry pulling Ollama model}
+  - op: ai.ollama_model_sync
+    path: /ai/ollama/model/sync
+    module: ai
+    risk: write
+    desc: {zh: 同步 Ollama 模型列表, en: Sync Ollama model list}
+  - op: ai.ollama_close
+    path: /ai/ollama/close
+    module: ai
+    risk: write
+    desc: {zh: 断开 Ollama 模型的连接, en: Close Ollama model connection}
+  - op: ai.ollama_model_delete
+    path: /ai/ollama/model/del
+    module: ai
+    risk: destructive
+    desc: {zh: 删除 Ollama 模型文件，重新下载要几 GB 流量, en: Delete Ollama model}
+  - op: ai.ollama_domain_get
+    path: /ai/domain/get
+    module: ai
+    risk: read
+    desc: {zh: 查 Ollama 的绑定域名, en: Get Ollama bind domain}
+  - op: ai.ollama_domain_bind
+    path: /ai/domain/bind
+    module: ai
+    risk: write
+    desc: {zh: 给 Ollama 绑定域名, en: Bind Ollama domain}
+  - op: ai.ollama_domain_update
+    path: /ai/domain/update
+    module: ai
+    risk: write
+    desc: {zh: 修改 Ollama 的绑定域名, en: Update Ollama bind domain}
+
+  # GPU
+  - op: ai.gpu
+    path: /ai/gpu/load
+    module: ai
+    risk: read
+    desc: {zh: 查 GPU / XPU 信息, en: Load GPU info}
+  - op: ai.gpu_monitor
+    path: /ai/gpu/search
+    module: ai
+    risk: read
+    desc: {zh: 查 GPU 历史监控数据, en: Load GPU monitor data}
+  - op: ai.gpu_options
+    path: /ai/gpu/options
+    module: ai
+    risk: read
+    desc: {zh: 列出可选的 GPU 采集对象, en: Get GPU options}
+
+  # 托管的第三方 MCP 服务（和 ViPanel 自己这套 MCP 无关）
+  - op: ai.mcp_servers
+    path: /ai/mcp/search
+    module: ai
+    risk: read
+    desc: {zh: 分页列出面板托管的第三方 MCP 服务, en: Page hosted MCP servers}
+    fields: [id, name, type, status, port, baseUrl]
+  - op: ai.mcp_server_detail
+    path: /ai/mcp/server/detail
+    module: ai
+    risk: read
+    desc: {zh: 查一个托管 MCP 服务的详情, en: Load hosted MCP server detail}
+  - op: ai.mcp_server_create
+    path: /ai/mcp/server
+    module: ai
+    risk: write
+    desc: {zh: 部署一个第三方 MCP 服务（起容器）, en: Create hosted MCP server}
+  - op: ai.mcp_server_update
+    path: /ai/mcp/server/update
+    module: ai
+    risk: write
+    desc: {zh: 修改托管 MCP 服务, en: Update hosted MCP server}
+  - op: ai.mcp_server_operate
+    path: /ai/mcp/server/op
+    module: ai
+    risk: write
+    desc: {zh: 启停托管 MCP 服务, en: Operate hosted MCP server}
+  - op: ai.mcp_server_test
+    path: /ai/mcp/server/connection/test
+    module: ai
+    risk: read
+    desc: {zh: 测试托管 MCP 服务连通性, en: Test hosted MCP server connection}
+  - op: ai.mcp_server_sync
+    path: /ai/mcp/server/status/sync
+    module: ai
+    risk: write
+    desc: {zh: 同步托管 MCP 服务状态, en: Sync hosted MCP server status}
+  - op: ai.mcp_server_delete
+    path: /ai/mcp/server/del
+    module: ai
+    risk: destructive
+    desc: {zh: 删除托管 MCP 服务及其容器, en: Delete hosted MCP server}
+  - op: ai.mcp_domain_get
+    path: /ai/mcp/domain/get
+    module: ai
+    risk: read
+    desc: {zh: 查托管 MCP 服务的绑定域名, en: Get hosted MCP bind domain}
+  - op: ai.mcp_domain_bind
+    path: /ai/mcp/domain/bind
+    module: ai
+    risk: write
+    desc: {zh: 给托管 MCP 服务绑定域名, en: Bind hosted MCP domain}
+  - op: ai.mcp_domain_update
+    path: /ai/mcp/domain/update
+    module: ai
+    risk: write
+    desc: {zh: 修改托管 MCP 服务的绑定域名, en: Update hosted MCP domain}
+
+  # TensorRT LLM
+  - op: ai.tensorrt_list
+    path: /ai/tensorrt/search
+    module: ai
+    risk: read
+    desc: {zh: 分页列出 TensorRT LLM 实例, en: Page TensorRT LLMs}
+  - op: ai.tensorrt_create
+    path: /ai/tensorrt/create
+    module: ai
+    risk: write
+    desc: {zh: 创建 TensorRT LLM 实例, en: Create TensorRT LLM}
+  - op: ai.tensorrt_update
+    path: /ai/tensorrt/update
+    module: ai
+    risk: write
+    desc: {zh: 修改 TensorRT LLM 实例, en: Update TensorRT LLM}
+  - op: ai.tensorrt_operate
+    path: /ai/tensorrt/operate
+    module: ai
+    risk: write
+    desc: {zh: 启停 TensorRT LLM 实例, en: Operate TensorRT LLM}
+  - op: ai.tensorrt_delete
+    path: /ai/tensorrt/delete
+    module: ai
+    risk: destructive
+    desc: {zh: 删除 TensorRT LLM 实例, en: Delete TensorRT LLM}

@@ -144,6 +144,9 @@ type catalogOp struct {
 
 const consolePrefix = "/ai/console"
 
+// truncated 记录有多少个 schema 在递归点被截断，生成完报一次，别让它悄悄发生。
+var truncated int
+
 func main() {
 	var (
 		root  = flag.String("root", ".", "仓库根目录")
@@ -197,6 +200,9 @@ func main() {
 	die(err)
 	die(os.WriteFile(*out, src, 0o644))
 	fmt.Printf("已生成 %s：%d 个 op\n", *out, len(ops))
+	if truncated > 0 {
+		fmt.Printf("其中 %d 处递归 schema 被截断成不透明对象\n", truncated)
+	}
 }
 
 // -- 加载 -------------------------------------------------------------------
@@ -439,7 +445,7 @@ func buildSchema(sw *swaggerDoc, path string, op swaggerOp, fixed map[string]any
 			if len(p.Schema) == 0 {
 				continue
 			}
-			node, err := resolve(sw, p.Schema, 0)
+			node, err := resolve(sw, p.Schema, nil)
 			if err != nil {
 				return "", nil, nil, err
 			}
@@ -505,21 +511,35 @@ func scalarType(t string) string {
 	}
 }
 
-func resolve(sw *swaggerDoc, raw json.RawMessage, depth int) (any, error) {
-	if depth > 8 {
-		return nil, fmt.Errorf("schema 嵌套超过 8 层，疑似循环引用")
-	}
+// resolve 把 $ref 就地展开成自包含的 schema。
+//
+// 深度只在**跟 $ref 的时候**算，普通的 properties/items 嵌套不算——
+// 早先两种都计数，结果 dto.CronjobImport 这种嵌套深但完全没有环的 schema
+// 被误判成循环引用。判环要看的是「这条引用链上有没有重复的定义名」。
+func resolve(sw *swaggerDoc, raw json.RawMessage, chain []string) (any, error) {
 	var node map[string]any
 	if err := json.Unmarshal(raw, &node); err != nil {
 		return nil, err
 	}
 	if ref, ok := node["$ref"].(string); ok {
 		name := ref[strings.LastIndexByte(ref, '/')+1:]
+		for _, prev := range chain {
+			if prev == name {
+				// 成环了（dto.DataTree 这种自递归的树结构）。MCP 的 inputSchema
+				// 必须自包含，展不开又不能无限展开，所以在递归点截断成一个不透明对象
+				// 并**明说**它被截断了——不标注的话模型会以为这里只能填空对象。
+				truncated++
+				return map[string]any{
+					"type":        "object",
+					"description": "嵌套结构（" + name + "），递归定义已截断，按面板文档填写",
+				}, nil
+			}
+		}
 		def, ok := sw.Definitions[name]
 		if !ok {
 			return nil, fmt.Errorf("definitions 里没有 %s", name)
 		}
-		return resolve(sw, def, depth+1)
+		return resolve(sw, def, append(chain, name))
 	}
 	for k, v := range node {
 		switch k {
@@ -530,7 +550,7 @@ func resolve(sw *swaggerDoc, raw json.RawMessage, depth int) (any, error) {
 			}
 			for pk, pv := range sub {
 				b, _ := json.Marshal(pv)
-				r, err := resolve(sw, b, depth+1)
+				r, err := resolve(sw, b, chain)
 				if err != nil {
 					return nil, err
 				}
@@ -538,7 +558,7 @@ func resolve(sw *swaggerDoc, raw json.RawMessage, depth int) (any, error) {
 			}
 		case "items":
 			b, _ := json.Marshal(v)
-			r, err := resolve(sw, b, depth+1)
+			r, err := resolve(sw, b, chain)
 			if err != nil {
 				return nil, err
 			}

@@ -136,3 +136,18 @@ func TestResidentReadIsAllowedWithoutModuleAuth(t *testing.T) {
 		t.Error("常驻工具不该顺带授权整个板块")
 	}
 }
+
+// 「总是允许」不能顺带把板块也授权掉。
+//
+// 那张名单是跨会话持久的（存在 harness 配置里），而板块授权只在本会话内。
+// 不隔开的话，新会话里一个曾被「总是允许」的写操作会静默授权整个板块，
+// 包括让这个板块的全部只读从此免问——用户当初点的不是这个意思。
+func TestAlwaysAllowDoesNotGrantModuleOnFirstUse(t *testing.T) {
+	src, err := os.ReadFile("mcp_decide.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(src), `if !firstUse && !op.NoAlways`) {
+		t.Error("firstUse 时必须跳过「总是允许」名单，先走一次板块授权卡片")
+	}
+}

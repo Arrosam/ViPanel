@@ -82,7 +82,11 @@ func DecideMCP(req PermRequest) (Verdict, bool) {
 	// PreToolUse 跑在权限规则之前，我们一返回 allow/deny，它的规则就没机会执行了。
 	// 所以名单只能由我们来认。但存在它的配置里，真相仍然只有一份，
 	// 用户在标准位置看得到改得了。见 MCP.md §6.2。
-	if !op.NoAlways && op.Risk == "write" {
+	// **firstUse 时不看这张名单。**「总是允许」是跨会话持久的（存在 harness 配置里），
+	// 而板块授权只在本会话内。两者叠加的话，新会话里一个曾被「总是允许」的写操作
+	// 会静默把整个板块也授权掉——包括让这个板块的所有只读从此免问。
+	// 用户当初点的是「这个工具以后别问了」，不是「以后这个板块随便用」。
+	if !firstUse && !op.NoAlways && op.Risk == "write" {
 		if s, ok := M().Get(req.SessionID); ok {
 			if ps, ok := s.Harness.(PermissionStore); ok && ps.AlwaysAllowed(req.Tool) {
 				return allow("用户此前选择了总是允许")

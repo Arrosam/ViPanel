@@ -103,6 +103,28 @@ type Discoverer interface {
 	Discover(known map[string]bool, limit int) []Discovered
 }
 
+// AutoAllower 由「有一些纯内部机制的工具」的 harness 实现。
+//
+// 这类工具不碰任何东西，只是 harness 自己找工具/等服务的中间步骤。
+// 为它们弹确认卡片是纯噪音——而且比噪音更糟：实测里 agent 每次想找面板工具
+// 都被拦住等满 120 秒，整条链路根本跑不起来。
+//
+// 判断哪些工具属于这一类是 harness 特有的知识，所以放在各自的适配层里。
+type AutoAllower interface {
+	AutoAllow(tool string) bool
+}
+
+// AutoAllowed 问某个会话的 harness：这个工具要不要直接放行。
+// 会话不在或 harness 没实现这个接口时一律返回 false——默认是问人，不是放行。
+func AutoAllowed(sessionID, tool string) bool {
+	s, ok := M().Get(sessionID)
+	if !ok {
+		return false
+	}
+	a, ok := s.Harness.(AutoAllower)
+	return ok && a.AutoAllow(tool)
+}
+
 // PermissionStore 由「自己有一份权限规则配置」的 harness 实现。
 //
 // 「总是允许」的名单必须由**我们的钩子**来认——实测过，把工具写进

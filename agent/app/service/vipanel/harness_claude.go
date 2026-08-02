@@ -425,6 +425,21 @@ func hookPath() string {
 // HookInstalled 供界面判断要不要标出「权限代理未生效」。
 func HookInstalled() bool { return hookPath() != "" }
 
+// AutoAllow：claude 自己的内部机制类工具，不该打扰人。
+//
+//   - ToolSearch —— tool search 默认开启，MCP 工具的 schema 被 defer，
+//     模型每次要用面板工具都先走它一次。实测它**确实会过 PreToolUse 钩子**，
+//     不放行的话每找一次工具就弹一次窗，agent 直接卡死在那儿。
+//     它只读工具定义，不碰任何东西。
+//   - WaitForMcpServers —— 关掉 tool search 时的替代品，同样只是等待。
+func (claudeCode) AutoAllow(tool string) bool {
+	switch tool {
+	case "ToolSearch", "WaitForMcpServers":
+		return true
+	}
+	return false
+}
+
 func mcpPath() string {
 	self, err := os.Executable()
 	if err != nil {

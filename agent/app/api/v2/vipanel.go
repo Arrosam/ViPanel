@@ -487,6 +487,14 @@ func (b *BaseApi) ViHookDecide(c *gin.Context) {
 	}
 	req.ID = uuid.NewString()
 
+	// harness 自己的内部机制类工具（claude 的 ToolSearch 之类）直接放行。
+	// 它们不碰任何东西，弹卡片纯属噪音——而且实测会把 agent 卡死：
+	// 模型每次要用面板工具都先走一次 ToolSearch，每次都等满 120 秒。
+	if vipanel.AutoAllowed(req.SessionID, req.Tool) {
+		c.JSON(200, vipanel.Verdict{Decision: vipanel.DecideAllow})
+		return
+	}
+
 	// 面板操作（mcp__vipanel__*）走自己那套判定：板块授权 + 三档风险 + 台账 + 审计。
 	// 不是面板操作时 handled 为 false，行为和以前完全一样。
 	if v, handled := vipanel.DecideMCP(req); handled {

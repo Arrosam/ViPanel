@@ -25,6 +25,32 @@
             </div>
         </template>
 
+        <!-- 板块授权：第一次真正用到这个板块时问一次 -->
+        <template v-else-if="isModule">
+            <div class="vp-perm__title">{{ req.title }}</div>
+            <div class="vp-perm__meta">
+                {{ $t('aiTools.console.permOpCount', [req.opCount]) }}
+                <span v-if="req.destructiveCount" class="vp-perm__warn">
+                    {{ $t('aiTools.console.permDestructiveCount', [req.destructiveCount]) }}
+                </span>
+            </div>
+            <div class="vp-perm__hint">{{ $t('aiTools.console.permModuleHint') }}</div>
+        </template>
+
+        <!-- 面板操作：显示渲染好的一句人话，原始入参折在下面 -->
+        <template v-else-if="isMcp">
+            <div v-if="req.danger" class="vp-perm__danger">
+                {{ $t('aiTools.console.permDanger') }}
+            </div>
+            <div class="vp-perm__title">{{ req.title }}</div>
+            <div class="vp-perm__meta">{{ req.moduleTitle }} · {{ shortTool }}</div>
+            <el-collapse class="vp-perm__more">
+                <el-collapse-item :title="$t('aiTools.console.permRawInput')">
+                    <pre class="vp-perm__input">{{ prettyInput }}</pre>
+                </el-collapse-item>
+            </el-collapse>
+        </template>
+
         <template v-else>
             <div class="vp-perm__tool">{{ req?.tool }}</div>
             <pre class="vp-perm__input">{{ prettyInput }}</pre>
@@ -41,9 +67,14 @@
                 <el-button type="danger" plain @click="decide('deny')">
                     {{ $t('aiTools.console.permDeny') }}
                 </el-button>
-                <el-button @click="decide('ask')">{{ $t('aiTools.console.permAsk') }}</el-button>
-                <el-button type="primary" @click="decide('allow')">
-                    {{ $t('aiTools.console.permAllow') }}
+                <el-button v-if="!isModule && !isMcp" @click="decide('ask')">
+                    {{ $t('aiTools.console.permAsk') }}
+                </el-button>
+                <el-button v-if="req?.canAlways" @click="decide('always')">
+                    {{ $t('aiTools.console.permAlways') }}
+                </el-button>
+                <el-button :type="armed ? 'danger' : 'primary'" @click="confirmAllow">
+                    {{ armed ? $t('aiTools.console.permConfirmAgain') : $t('aiTools.console.permAllow') }}
                 </el-button>
             </template>
         </template>
@@ -62,6 +93,29 @@ const left = ref(0);
 let timer: ReturnType<typeof setInterval> | undefined;
 
 const isAsk = computed(() => !!props.req?.questions?.length);
+const isModule = computed(() => props.req?.kind === 'module');
+const isMcp = computed(() => props.req?.kind === 'mcp');
+const shortTool = computed(() => (props.req?.tool || '').replace('mcp__vipanel__', ''));
+
+// 危险操作要点两下。目的只是**防手滑**，不是让人再读一遍——
+// 那种「手打一遍名字」的二次确认会养成机械照抄的习惯，
+// 反而分走了阅读上面那行危险横幅的注意力。
+const armed = ref(false);
+let armTimer: ReturnType<typeof setTimeout> | undefined;
+const confirmAllow = () => {
+    if (!props.req?.danger) {
+        decide('allow');
+        return;
+    }
+    if (armed.value) {
+        armed.value = false;
+        if (armTimer) clearTimeout(armTimer);
+        decide('allow');
+        return;
+    }
+    armed.value = true;
+    armTimer = setTimeout(() => (armed.value = false), 4000);
+};
 
 const prettyInput = computed(() => {
     if (!props.req) return '';
@@ -86,6 +140,8 @@ watch(
     (r) => {
         single.value = {};
         multi.value = {};
+        armed.value = false;
+        if (armTimer) clearTimeout(armTimer);
         if (timer) clearInterval(timer);
         if (!r) return;
         const tick = () => {
@@ -96,7 +152,10 @@ watch(
     },
 );
 
-onBeforeUnmount(() => timer && clearInterval(timer));
+onBeforeUnmount(() => {
+    if (timer) clearInterval(timer);
+    if (armTimer) clearTimeout(armTimer);
+});
 
 const decide = async (d: string) => {
     await resolvePermission(props.req.id, d, '');
@@ -119,6 +178,39 @@ const answer = async () => {
 </script>
 
 <style lang="scss" scoped>
+.vp-perm__danger {
+    margin-bottom: 10px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-weight: 600;
+    color: var(--el-color-danger);
+    background: var(--el-color-danger-light-9);
+    border: 1px solid var(--el-color-danger-light-5);
+}
+.vp-perm__title {
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.5;
+}
+.vp-perm__meta {
+    margin-top: 4px;
+    font-size: 12px;
+    color: var(--el-text-color-secondary);
+}
+.vp-perm__warn {
+    margin-left: 6px;
+    color: var(--el-color-danger);
+}
+.vp-perm__hint {
+    margin-top: 10px;
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--el-text-color-secondary);
+}
+.vp-perm__more {
+    margin-top: 10px;
+    border-top: none;
+}
 .vp-perm__tool {
     font-weight: 600;
     margin-bottom: 6px;

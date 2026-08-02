@@ -56,6 +56,7 @@ func (claudeCode) Spawn(ctx SpawnContext) PtySpec {
 	// 而向导只存在于 agent 屏幕上，transcript 里一个字都没有
 	ensureOnboarded(ctx.Cwd)
 	ensureHook()
+	ensureMCP()
 
 	args := []string{"--session-id", ctx.SessionID}
 	if ctx.Resume {
@@ -423,6 +424,143 @@ func hookPath() string {
 
 // HookInstalled 供界面判断要不要标出「权限代理未生效」。
 func HookInstalled() bool { return hookPath() != "" }
+
+func mcpPath() string {
+	self, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	p := filepath.Join(filepath.Dir(self), "vipanel-mcp")
+	if st, err := os.Stat(p); err != nil || st.Mode()&0o111 == 0 {
+		return ""
+	}
+	return p
+}
+
+// MCPInstalled 供界面判断面板操作能力在不在。
+func MCPInstalled() bool { return mcpPath() != "" }
+
+// ensureMCP 把 ViPanel 的 MCP 服务写进 claude 的用户级配置。
+//
+// **user scope（~/.claude.json 顶层 mcpServers）而不是 project scope**：
+// project scope 要往用户的项目目录写 .mcp.json（污染用户仓库），而且每个新目录
+// 都要交互式批准——会话每换一个 cwd 卡一次批准，这个功能就废了。
+//
+// user scope 的代价是它也会出现在用户自己终端里跑的 claude 上，
+// 但那个进程不是面板 spawn 的后代，连上来会被血缘校验拒掉（ancestry.go），
+// 所以外溢只是「配置看得到」，不是「能用」。
+//
+// timeout 必须显式给：装应用这类操作撞得上默认值。
+func ensureMCP() {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+	path := filepath.Join(home, ".claude.json")
+
+	cfg := map[string]any{}
+	if raw, err := os.ReadFile(path); err == nil {
+		if json.Unmarshal(raw, &cfg) != nil {
+			return // 解析不了就别动，写坏用户的配置比不写糟得多
+		}
+	}
+	servers, _ := cfg["mcpServers"].(map[string]any)
+	if servers == nil {
+		servers = map[string]any{}
+	}
+
+	bin := mcpPath()
+	if bin == "" || !MCPEnabled() {
+		// 二进制不在、或用户在设置里关掉了：把配置**删掉**，不留死引用。
+		// 留着的话 claude 每次起会话都会去连一个连不上的服务。
+		if _, ok := servers["vipanel"]; !ok {
+			return
+		}
+		delete(servers, "vipanel")
+	} else {
+		want := map[string]any{
+			"type":    "stdio",
+			"command": bin,
+			"timeout": float64(600000),
+		}
+		if same(servers["vipanel"], want) {
+			return
+		}
+		servers["vipanel"] = want
+	}
+	cfg["mcpServers"] = servers
+
+	if raw, err := json.MarshalIndent(cfg, "", "  "); err == nil {
+		_ = os.WriteFile(path, raw, 0o600)
+	}
+}
+
+// -- PermissionStore：「总是允许」名单 ----------------------------------------
+
+func claudeSettingsPath() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, ".claude", "settings.json")
+}
+
+func (c claudeCode) AlwaysAllowed(tool string) bool {
+	p := claudeSettingsPath()
+	if p == "" {
+		return false
+	}
+	raw, err := os.ReadFile(p)
+	if err != nil {
+		return false
+	}
+	var cfg struct {
+		Permissions struct {
+			Allow []string `json:"allow"`
+		} `json:"permissions"`
+	}
+	if json.Unmarshal(raw, &cfg) != nil {
+		return false
+	}
+	for _, v := range cfg.Permissions.Allow {
+		if v == tool {
+			return true
+		}
+	}
+	return false
+}
+
+func (c claudeCode) AddAlwaysAllow(tool string) error {
+	p := claudeSettingsPath()
+	if p == "" {
+		return os.ErrNotExist
+	}
+	cfg := map[string]any{}
+	if raw, err := os.ReadFile(p); err == nil {
+		if err := json.Unmarshal(raw, &cfg); err != nil {
+			return err // 解析不了就别动
+		}
+	}
+	perms, _ := cfg["permissions"].(map[string]any)
+	if perms == nil {
+		perms = map[string]any{}
+	}
+	list, _ := perms["allow"].([]any)
+	for _, v := range list {
+		if s, ok := v.(string); ok && s == tool {
+			return nil
+		}
+	}
+	perms["allow"] = append(list, tool)
+	cfg["permissions"] = perms
+
+	raw, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return err
+	}
+	_ = os.MkdirAll(filepath.Dir(p), 0o700)
+	return os.WriteFile(p, raw, 0o600)
+}
 
 // ensureHook 把 PreToolUse 钩子写进 claude 的用户级 settings.json。
 //

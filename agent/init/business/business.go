@@ -14,6 +14,7 @@ func Init() {
 	// ViPanel：读回会话与实例池上限。只重建条目，不启动任何 agent 进程——
 	// 起不起由实例池按 LRU 决定。放在同步执行，界面第一次拉列表就得能看到。
 	vipanel.LoadPoolSize()
+	vipanel.LoadMCPEnabled()
 	vipanel.Restore()
 
 	go syncApp()

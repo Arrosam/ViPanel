@@ -37,3 +37,8 @@ export const openHistory = (id: string, cwd: string, title: string) =>
 
 export const controlSession = (id: string, kind: string, value: string) =>
     http.post(`/ai/console/sessions/control`, { id, kind, value });
+
+// 面板操作能力（MCP）总开关
+export const getMcpSetting = () => http.get<any>('/ai/console/mcp/setting');
+export const updateMcpSetting = (enabled: boolean) =>
+    http.post<any>('/ai/console/mcp/setting/update', { enabled });

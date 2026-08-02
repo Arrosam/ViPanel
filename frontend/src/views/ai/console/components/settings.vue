@@ -7,6 +7,13 @@
                 <div class="vp-set__note">{{ $t('aiTools.console.poolState', [pool.active, pool.size]) }}</div>
             </el-form-item>
 
+            <el-form-item :label="$t('aiTools.console.mcpTitle')">
+                <el-switch v-model="mcp.enabled" :disabled="!mcp.installed" />
+                <div class="vp-set__note">{{ $t('aiTools.console.mcpHint') }}</div>
+                <div v-if="!mcp.installed" class="vp-set__bad">{{ $t('aiTools.console.mcpMissing') }}</div>
+                <div v-else class="vp-set__note">{{ $t('aiTools.console.mcpState', [mcp.opCount]) }}</div>
+            </el-form-item>
+
             <el-form-item :label="$t('aiTools.console.harnesses')">
                 <div v-for="h in harnesses" :key="h.id" class="vp-set__h">
                     <b>{{ h.displayName }}</b>
@@ -36,7 +43,15 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
-import { getPool, updatePool, listHarnesses, getAgentAuth, agentLogout } from '@/api/modules/vipanel';
+import {
+    getPool,
+    updatePool,
+    listHarnesses,
+    getAgentAuth,
+    agentLogout,
+    getMcpSetting,
+    updateMcpSetting,
+} from '@/api/modules/vipanel';
 import { ViPanel } from '@/api/interface/vipanel';
 import { MsgError, MsgSuccess } from '@/utils/message';
 import { useI18n } from 'vue-i18n';
@@ -49,18 +64,21 @@ const size = ref(2);
 const pool = ref<ViPanel.Pool>({ size: 2, active: 0, order: [] });
 const harnesses = ref<ViPanel.Harness[]>([]);
 const auth = ref<ViPanel.AuthState>({ supported: false, loggedIn: true, hookInstalled: true });
+const mcp = ref({ enabled: true, installed: false, opCount: 0 });
 
 const load = async () => {
-    const [p, hs, a] = await Promise.all([getPool(), listHarnesses(), getAgentAuth()]);
+    const [p, hs, a, m] = await Promise.all([getPool(), listHarnesses(), getAgentAuth(), getMcpSetting()]);
     pool.value = p.data;
     size.value = p.data.size;
     harnesses.value = hs.data || [];
     auth.value = a.data;
+    mcp.value = { ...mcp.value, ...m.data };
 };
 
 const save = async () => {
     try {
         pool.value = (await updatePool(size.value)).data;
+        await updateMcpSetting(mcp.value.enabled);
         MsgSuccess(t('aiTools.console.saved'));
         visible.value = false;
         emit('changed');

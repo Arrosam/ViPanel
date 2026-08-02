@@ -5,6 +5,7 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/1Panel-dev/1Panel/agent/app/service/vipanel/mcp"
 	"github.com/1Panel-dev/1Panel/agent/global"
 )
 
@@ -77,6 +78,10 @@ func (m *Manager) Remove(id string) {
 	delete(m.sessions, id)
 	m.mu.Unlock()
 	if s != nil {
+		// 板块授权和决定台账跟着会话一起消失。
+		// 不清的话，同一个 id 被重新建出来会**继承上一次的授权**——
+		// 那就等于跨会话记忆了，正是我们不要的。
+		mcp.Gate().Forget(id)
 		s.stopStream()
 		s.stop("会话已结束")
 	}

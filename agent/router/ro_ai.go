@@ -34,6 +34,9 @@ func (a *AIToolsRouter) InitRouter(Router *gin.RouterGroup) {
 		aiToolsRouter.GET("/console/auth/login", baseApi.WsViAuthLogin)
 		aiToolsRouter.POST("/console/hook/decide", baseApi.ViHookDecide)
 		aiToolsRouter.POST("/console/permission/resolve", baseApi.ViPermissionResolve)
+		aiToolsRouter.GET("/console/mcp/ws", baseApi.WsConsoleMCP)
+		aiToolsRouter.GET("/console/mcp/setting", baseApi.GetViMCPSetting)
+		aiToolsRouter.POST("/console/mcp/setting/update", baseApi.UpdateViMCPSetting)
 
 		aiToolsRouter.POST("/ollama/close", baseApi.CloseOllamaModel)
 		aiToolsRouter.POST("/ollama/model", baseApi.CreateOllamaModel)

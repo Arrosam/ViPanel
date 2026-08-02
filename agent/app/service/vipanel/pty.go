@@ -81,6 +81,15 @@ func StartPty(spec PtySpec) (*Pty, error) {
 func (p *Pty) Read(b []byte) (int, error)  { return p.tty.Read(b) }
 func (p *Pty) Write(b []byte) (int, error) { return p.tty.Write(b) }
 
+// Pid 是 agent 进程的 pid。MCP 的血缘校验靠它认出连进来的管子属于哪个会话
+// （见 ancestry.go）。进程还没起来时返回 0。
+func (p *Pty) Pid() int {
+	if p.cmd.Process == nil {
+		return 0
+	}
+	return p.cmd.Process.Pid
+}
+
 // Done 在底下的进程退出时关闭。
 func (p *Pty) Done() <-chan struct{} { return p.done }
 

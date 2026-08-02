@@ -36,6 +36,24 @@ type PermRequest struct {
 
 	// AskUserQuestion 专用：解析好的问题，前端直接渲染成选择控件
 	Questions []AskQuestion `json:"questions,omitempty"`
+
+	// -- 以下是 MCP（面板操作）专用，普通工具调用不填 --
+
+	// Kind 为空是原来的工具卡片；"mcp" 是一次面板操作；"module" 是板块授权。
+	Kind string `json:"kind,omitempty"`
+	// Title 是渲染好的一句人话，比如「删除网站 example.com，同时删除数据库和备份」。
+	// 卡片上显示它而不是原始 JSON——人看不懂就会一路点允许，
+	// 那时权限代理是摆设不是护栏。
+	Title string `json:"title,omitempty"`
+	Risk  string `json:"risk,omitempty"`
+	// Danger 为 true 时前端显示红色危险横幅并要求双击确认。
+	Danger bool `json:"danger,omitempty"`
+	// CanAlways 决定「总是允许」按钮出不出现。删除类永远为 false。
+	CanAlways        bool   `json:"canAlways,omitempty"`
+	Module           string `json:"module,omitempty"`
+	ModuleTitle      string `json:"moduleTitle,omitempty"`
+	OpCount          int    `json:"opCount,omitempty"`
+	DestructiveCount int    `json:"destructiveCount,omitempty"`
 }
 
 type AskQuestion struct {

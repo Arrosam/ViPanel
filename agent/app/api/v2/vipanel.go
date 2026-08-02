@@ -10,6 +10,7 @@ import (
 	"github.com/1Panel-dev/1Panel/agent/app/api/v2/helper"
 	"github.com/1Panel-dev/1Panel/agent/app/dto"
 	"github.com/1Panel-dev/1Panel/agent/app/service/vipanel"
+	"github.com/1Panel-dev/1Panel/agent/app/service/vipanel/mcp"
 	"github.com/1Panel-dev/1Panel/agent/global"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -485,8 +486,97 @@ func (b *BaseApi) ViHookDecide(c *gin.Context) {
 		return
 	}
 	req.ID = uuid.NewString()
+
+	// 面板操作（mcp__vipanel__*）走自己那套判定：板块授权 + 三档风险 + 台账 + 审计。
+	// 不是面板操作时 handled 为 false，行为和以前完全一样。
+	if v, handled := vipanel.DecideMCP(req); handled {
+		c.JSON(200, v)
+		return
+	}
+
 	// 这里会阻塞到有人决定或超时。hook 那边是同步等着的。
 	c.JSON(200, vipanel.Broker().Ask(req))
+}
+
+// @Tags ViPanel
+// @Summary MCP 服务端（仅本机 unix socket，且必须是本面板起的会话的后代）
+// @Router /ai/console/mcp/ws [get]
+func (b *BaseApi) WsConsoleMCP(c *gin.Context) {
+	if !websocket.IsWebSocketUpgrade(c.Request) {
+		helper.Success(c)
+		return
+	}
+	if !vipanel.MCPEnabled() {
+		helper.ErrorWithDetail(c, 403, "ErrForbidden", errors.New("面板操作能力已在设置中关闭"))
+		return
+	}
+
+	// 血缘校验。**在升级之前**做——升级完再关连接的话，
+	// 管子那侧只会看到一个没有理由的断线。
+	pid, _ := strconv.Atoi(c.GetHeader("X-VP-Pipe-Pid"))
+	sess := vipanel.M().SessionByDescendant(pid)
+	if sess == nil {
+		global.LOG.Infof("vipanel: 拒绝一个非本面板会话后代的 MCP 连接, pid=%d", pid)
+		helper.ErrorWithDetail(c, 403, "ErrForbidden",
+			errors.New("这个进程不属于任何 ViPanel 会话"))
+		return
+	}
+
+	conn, err := upGrader.Upgrade(c.Writer, c.Request, nil)
+	if err != nil {
+		global.LOG.Errorf("vipanel: MCP websocket 升级失败, err: %v", err)
+		return
+	}
+	defer conn.Close()
+
+	mcp.NewServer(&wsTransport{conn: conn}, sess.ID).Run()
+}
+
+// wsTransport 把 gorilla 的连接适配成 MCP 服务端要的收发接口。
+//
+// 写必须加锁：服务端在回应之外还会**主动**推 notifications/tools/list_changed，
+// 两个 goroutine 同时写同一个 websocket 会直接 panic。
+type wsTransport struct {
+	conn *websocket.Conn
+	mu   sync.Mutex
+}
+
+func (t *wsTransport) Recv() ([]byte, error) {
+	_, msg, err := t.conn.ReadMessage()
+	return msg, err
+}
+
+func (t *wsTransport) Send(b []byte) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.conn.WriteMessage(websocket.TextMessage, b)
+}
+
+// @Tags ViPanel
+// @Summary 面板操作能力（MCP）总开关
+// @Router /ai/console/mcp/setting [get]
+func (b *BaseApi) GetViMCPSetting(c *gin.Context) {
+	helper.SuccessWithData(c, gin.H{
+		"enabled":   vipanel.MCPEnabled(),
+		"installed": vipanel.MCPInstalled(),
+		"modules":   mcp.Modules,
+		"opCount":   len(mcp.Catalog),
+	})
+}
+
+// @Tags ViPanel
+// @Summary 开关面板操作能力
+// @Router /ai/console/mcp/setting/update [post]
+func (b *BaseApi) UpdateViMCPSetting(c *gin.Context) {
+	var req struct {
+		Enabled bool `json:"enabled"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		helper.BadRequest(c, err)
+		return
+	}
+	vipanel.SetMCPEnabled(req.Enabled)
+	helper.SuccessWithData(c, gin.H{"enabled": vipanel.MCPEnabled()})
 }
 
 // @Tags ViPanel

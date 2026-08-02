@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/1Panel-dev/1Panel/agent/app/model"
@@ -236,4 +237,33 @@ func ExtractURLs(chunk []byte) []string {
 		out = append(out, strings.TrimRight(string(m), ".,;:。，、；："))
 	}
 	return out
+}
+
+// -- MCP 总开关 --------------------------------------------------------------
+
+const mcpEnabledKey = "ViPanelMCPEnabled"
+
+var mcpEnabled atomic.Bool
+
+// MCPEnabled 是「允许 agent 操作面板」的总开关。
+//
+// 默认**开**：这是 ViPanel 相对于一个网页版 Claude Code 的唯一实质差别，
+// 默认关等于默认没有。关掉时 ensureMCP 会把 harness 配置里的那条删掉，
+// 新会话里 mcp__vipanel__* 一个都不剩。
+func MCPEnabled() bool { return mcpEnabled.Load() }
+
+func SetMCPEnabled(v bool) {
+	mcpEnabled.Store(v)
+	saveSetting(mcpEnabledKey, strconv.FormatBool(v))
+}
+
+// LoadMCPEnabled 启动时读回开关。没有记录时默认开。
+func LoadMCPEnabled() {
+	v := loadSetting(mcpEnabledKey)
+	if v == "" {
+		mcpEnabled.Store(true)
+		return
+	}
+	b, err := strconv.ParseBool(v)
+	mcpEnabled.Store(err != nil || b)
 }

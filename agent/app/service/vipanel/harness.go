@@ -103,6 +103,20 @@ type Discoverer interface {
 	Discover(known map[string]bool, limit int) []Discovered
 }
 
+// PermissionStore 由「自己有一份权限规则配置」的 harness 实现。
+//
+// 「总是允许」的名单必须由**我们的钩子**来认——实测过，把工具写进
+// harness 的允许名单不会让 PreToolUse 不触发，它跑在权限规则之前，
+// 我们一返回 allow/deny，它的规则就没机会执行了。
+//
+// 但名单**存在 harness 自己的配置里**，这样真相仍然只有一份：
+// 用户在标准位置看得到、改得了，哪天我们的钩子不在了它自己也会认。
+// 见 MCP.md §6.2。
+type PermissionStore interface {
+	AlwaysAllowed(tool string) bool
+	AddAlwaysAllow(tool string) error
+}
+
 // AuthState 是 harness 自己的登录状态（与面板登录无关）。
 type AuthState struct {
 	Supported bool `json:"supported"`

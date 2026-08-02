@@ -24,7 +24,10 @@ import (
 // （那会造成 api → service → router → api 的循环依赖）。代价是一次本机往返。
 const sockPath = "/etc/1panel/agent.sock"
 
-const dispatchTimeout = 90 * time.Second
+// 转发超时。要**小于** harness 那侧的 MCP 工具超时（我们在配置里写的是 600s），
+// 又要大到不会在面板还在正常干活时就先喊「未响应」——那会让 agent 以为失败并重试，
+// 而实际操作已经在跑，结果是装了两遍。真正的长任务走 taskID 异步，不占这个预算。
+const dispatchTimeout = 480 * time.Second
 
 var httpClient = &http.Client{
 	Timeout: dispatchTimeout,

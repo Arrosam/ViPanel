@@ -118,3 +118,49 @@ func TestInstructionsWithinBudget(t *testing.T) {
 		t.Error("缺少防重复那句——不写模型会拿 MCP 当文件工具用")
 	}
 }
+
+// 对账两侧算的指纹必须一致。
+//
+// 钩子那侧拿到的是 harness 发来的**原始 JSON 字节**（键序随意、可能带空格、
+// 还带着我们自己加的 vp* 整形参数），MCP 服务端那侧拿到的是解析后又摘掉整形
+// 参数的 map。两边不归一化的话每一次面板操作都会被自己的对账拦死，
+// 而且报出来的是「权限代理没生效」这种指向完全错误的信息。
+func TestInputHashAgreesAcrossBothSides(t *testing.T) {
+	// 钩子看到的原始字节：键序和服务端 map 序列化后不同，还多了整形参数
+	rawFromHook := []byte(`{"vpPageSize": 50, "name":"web", "id": 3, "vpGrep":"x"}`)
+
+	// 服务端解析后的参数（TakeShaper 已经摘掉 vp*）
+	args := map[string]any{"id": float64(3), "name": "web"}
+
+	if got, want := InputHashOfArgs(args), InputHash(rawFromHook); got != want {
+		t.Fatalf("两侧指纹不一致：服务端 %s vs 钩子 %s", got, want)
+	}
+}
+
+func TestInputHashIgnoresKeyOrderAndWhitespace(t *testing.T) {
+	a := InputHash([]byte(`{"a":1,"b":2}`))
+	b := InputHash([]byte(`{ "b" : 2 , "a" : 1 }`))
+	if a != b {
+		t.Fatal("键序和空格不该影响指纹")
+	}
+	if a == InputHash([]byte(`{"a":1,"b":3}`)) {
+		t.Fatal("值变了指纹必须跟着变")
+	}
+}
+
+// 走一遍钩子记账 → 服务端消费的完整链路，用两侧各自真实的输入形态。
+func TestLedgerRoundTripWithShaperParams(t *testing.T) {
+	g := Gate()
+	g.Forget("rt")
+
+	// 钩子侧：原始字节，带整形参数
+	g.Record("rt", "container_list", InputHash([]byte(`{"vpPage":2,"state":"running"}`)), "tu-9")
+
+	// 服务端侧：TakeShaper 摘掉 vp* 之后的 map
+	args := map[string]any{"vpPage": float64(2), "state": "running"}
+	_ = TakeShaper(args)
+
+	if !g.Consume("rt", "container_list", InputHashOfArgs(args), "tu-9") {
+		t.Fatal("同一次调用两侧应当对得上")
+	}
+}

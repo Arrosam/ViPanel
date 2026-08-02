@@ -247,8 +247,7 @@ func (s *Server) call(req rpcReq) {
 	// 对 Bash 那是既定的信任模型；对 MCP 来说没闸门 = 对面板不受限的 root 权力。
 	// 有了对账，那种情况下 MCP **整体失效而不是整体放行**。见 MCP.md §6.3。
 	shaper := TakeShaper(p.Arguments)
-	raw, _ := json.Marshal(p.Arguments)
-	if !Gate().Consume(s.sessionID, p.Name, InputHash(raw), p.Meta.ToolUseID) {
+	if !Gate().Consume(s.sessionID, p.Name, InputHashOfArgs(p.Arguments), p.Meta.ToolUseID) {
 		s.text(req.ID, "这次调用没有对应的权限决定记录，已拒绝执行。\n"+
 			"通常意味着 ViPanel 的权限代理没有生效（钩子未安装或被移除）。"+
 			"请让用户在面板上检查「权限代理」状态，不要改用其他方式绕过。")

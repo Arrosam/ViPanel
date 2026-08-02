@@ -3,6 +3,7 @@ package mcp
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"sync"
 	"time"
 )
@@ -85,9 +86,52 @@ func (g *gate) Forget(sessionID string) {
 
 // -- 决定台账 ---------------------------------------------------------------
 
+// InputHash 是对账的主键之一，**两侧必须算出同一个值**：
+// 钩子那侧拿到的是 harness 发来的原始 JSON 字节，MCP 服务端那侧拿到的是
+// 解析后又摘掉整形参数的 map。直接对字节做 sha256 的话，键序、空格、
+// 以及被摘掉的 vp* 参数，三样都会让两边对不上——结果是**每一次**面板操作
+// 都被自己的对账拦死，而且症状是「权限代理没生效」这种指向完全错误的报错。
+//
+// 所以先归一化：解析成 map、丢掉整形参数、再用 encoding/json 重新序列化
+// （它对 map 的键是排序输出的）。解析不了就退回原始字节，总比崩了强。
 func InputHash(raw []byte) string {
-	sum := sha256.Sum256(raw)
-	return hex.EncodeToString(sum[:8])
+	return hex.EncodeToString(hashOf(canonical(raw)))
+}
+
+// InputHashOfArgs 给已经解析成 map 的那一侧用，和 InputHash 等价。
+func InputHashOfArgs(args map[string]any) string {
+	cleaned := map[string]any{}
+	for k, v := range args {
+		if shaperKeys[k] {
+			continue
+		}
+		cleaned[k] = v
+	}
+	b, err := json.Marshal(cleaned)
+	if err != nil {
+		return ""
+	}
+	return hex.EncodeToString(hashOf(b))
+}
+
+func canonical(raw []byte) []byte {
+	var m map[string]any
+	if json.Unmarshal(raw, &m) != nil {
+		return raw
+	}
+	for k := range shaperKeys {
+		delete(m, k)
+	}
+	b, err := json.Marshal(m)
+	if err != nil {
+		return raw
+	}
+	return b
+}
+
+func hashOf(b []byte) []byte {
+	sum := sha256.Sum256(b)
+	return sum[:8]
 }
 
 // Record 登记一条「已被批准」的调用。只有 allow 才登记，deny 不登记——

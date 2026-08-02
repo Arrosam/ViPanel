@@ -495,7 +495,16 @@ func (b *BaseApi) ViHookDecide(c *gin.Context) {
 	}
 
 	// 这里会阻塞到有人决定或超时。hook 那边是同步等着的。
-	c.JSON(200, vipanel.Broker().Ask(req))
+	v := vipanel.Broker().Ask(req)
+	// hook 只认 allow/deny/ask 三种。别的值原样透出去会让 claude 拿到一个
+	// 无法解析的 permissionDecision——那时它的行为是未定义的，不能赌。
+	switch v.Decision {
+	case vipanel.DecideAllow, vipanel.DecideDeny, vipanel.DecideAsk:
+	default:
+		v = vipanel.Verdict{Decision: vipanel.DecideDeny,
+			Reason: "面板返回了无法识别的决定，按拒绝处理"}
+	}
+	c.JSON(200, v)
 }
 
 // @Tags ViPanel

@@ -127,6 +127,10 @@ func denyModuleReason(module string) string {
 func askModule(req PermRequest, op *mcp.Op) bool {
 	total, destructive := mcp.ModuleStats(op.Module)
 	card := req
+	// 板块卡片和随后的工具卡片是**两次**独立的询问，必须是两个 id。
+	// 复用同一个的话，多设备补发（PendingFor）和「谁先点算谁」的去重
+	// 都会把它们当成同一次决定。
+	card.ID = req.ID + ":module"
 	card.Kind = "module"
 	card.Module = op.Module
 	card.ModuleTitle = mcp.ModuleTitle(op.Module)

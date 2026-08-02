@@ -25,25 +25,26 @@
             </div>
         </template>
 
-        <!-- 板块授权：第一次真正用到这个板块时问一次 -->
-        <template v-else-if="isModule">
-            <div class="vp-perm__title">{{ req.title }}</div>
-            <div class="vp-perm__meta">
-                {{ $t('aiTools.console.permOpCount', [req.opCount]) }}
-                <span v-if="req.destructiveCount" class="vp-perm__warn">
-                    {{ $t('aiTools.console.permDestructiveCount', [req.destructiveCount]) }}
-                </span>
-            </div>
-            <div class="vp-perm__hint">{{ $t('aiTools.console.permModuleHint') }}</div>
-        </template>
-
-        <!-- 面板操作：显示渲染好的一句人话，原始入参折在下面 -->
+        <!-- 面板操作：显示渲染好的一句人话，原始入参折在下面。
+             首次用到某个板块时，这张卡片同时是该板块的授权。 -->
         <template v-else-if="isMcp">
             <div v-if="req.danger" class="vp-perm__danger">
                 {{ $t('aiTools.console.permDanger') }}
             </div>
             <div class="vp-perm__title">{{ req.title }}</div>
             <div class="vp-perm__meta">{{ req.moduleTitle }} · {{ shortTool }}</div>
+            <div v-if="req.firstUse" class="vp-perm__first">
+                <div>
+                    {{ $t('aiTools.console.permFirstUse', [req.moduleTitle]) }}
+                    <span class="vp-perm__meta">
+                        {{ $t('aiTools.console.permOpCount', [req.opCount]) }}
+                        <span v-if="req.destructiveCount" class="vp-perm__warn">
+                            {{ $t('aiTools.console.permDestructiveCount', [req.destructiveCount]) }}
+                        </span>
+                    </span>
+                </div>
+                <div class="vp-perm__hint">{{ $t('aiTools.console.permModuleHint') }}</div>
+            </div>
             <el-collapse class="vp-perm__more">
                 <el-collapse-item :title="$t('aiTools.console.permRawInput')">
                     <pre class="vp-perm__input">{{ prettyInput }}</pre>
@@ -67,7 +68,7 @@
                 <el-button type="danger" plain @click="decide('deny')">
                     {{ $t('aiTools.console.permDeny') }}
                 </el-button>
-                <el-button v-if="!isModule && !isMcp" @click="decide('ask')">
+                <el-button v-if="!isMcp" @click="decide('ask')">
                     {{ $t('aiTools.console.permAsk') }}
                 </el-button>
                 <el-button v-if="req?.canAlways" @click="decide('always')">
@@ -93,7 +94,6 @@ const left = ref(0);
 let timer: ReturnType<typeof setInterval> | undefined;
 
 const isAsk = computed(() => !!props.req?.questions?.length);
-const isModule = computed(() => props.req?.kind === 'module');
 const isMcp = computed(() => props.req?.kind === 'mcp');
 const shortTool = computed(() => (props.req?.tool || '').replace('mcp__vipanel__', ''));
 
@@ -200,6 +200,13 @@ const answer = async () => {
 .vp-perm__warn {
     margin-left: 6px;
     color: var(--el-color-danger);
+}
+.vp-perm__first {
+    margin-top: 12px;
+    padding: 10px 12px;
+    border-radius: 6px;
+    background: var(--el-fill-color-light);
+    font-size: 13px;
 }
 .vp-perm__hint {
     margin-top: 10px;

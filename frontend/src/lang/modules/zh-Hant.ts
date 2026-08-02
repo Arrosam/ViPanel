@@ -711,6 +711,7 @@ const message = {
             permDeny: '拒絕',
             permAsk: '退回終端',
             permAlways: '總是允許',
+            permFirstUse: '並授權本會話使用「{0}」板塊。',
             permConfirmAgain: '再點一次確認',
             permDanger: '危險操作，執行後不可恢復。',
             permRawInput: '原始入參',

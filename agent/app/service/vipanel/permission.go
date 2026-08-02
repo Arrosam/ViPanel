@@ -39,8 +39,12 @@ type PermRequest struct {
 
 	// -- 以下是 MCP（面板操作）专用，普通工具调用不填 --
 
-	// Kind 为空是原来的工具卡片；"mcp" 是一次面板操作；"module" 是板块授权。
+	// Kind 为空是原来的工具卡片；"mcp" 是一次面板操作。
 	Kind string `json:"kind,omitempty"`
+	// FirstUse 为 true 时这张卡片同时是该板块的首次授权：
+	// 批准它等于「允许这次操作」+「本会话内这个板块的只读不再询问」。
+	// 不拆成两张卡片连着弹，是因为每张最多等 120 秒而 hook 只等 150 秒。
+	FirstUse bool `json:"firstUse,omitempty"`
 	// Title 是渲染好的一句人话，比如「删除网站 example.com，同时删除数据库和备份」。
 	// 卡片上显示它而不是原始 JSON——人看不懂就会一路点允许，
 	// 那时权限代理是摆设不是护栏。

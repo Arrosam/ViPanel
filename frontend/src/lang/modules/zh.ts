@@ -714,6 +714,7 @@ const message = {
             permDeny: '拒绝',
             permAsk: '退回终端',
             permAlways: '总是允许',
+            permFirstUse: '并授权本会话使用「{0}」板块。',
             permConfirmAgain: '再点一次确认',
             permDanger: '危险操作，执行后不可恢复。',
             permRawInput: '原始入参',

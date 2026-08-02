@@ -48,22 +48,27 @@ func DecideMCP(req PermRequest) (Verdict, bool) {
 			Reason: "拒绝：这个操作属于会话自身的控制面，任何 agent 都不能调用它。"}, true
 	}
 
-	// 板块授权：第一次真正用到这个板块时问一次人。
-	if !mcp.Gate().ModuleAuthorized(req.SessionID, op.Module) {
-		if !askModule(req, op) {
-			audit(req, op, "deny", "板块未授权")
-			return Verdict{Decision: DecideDeny, Reason: denyModuleReason(op.Module)}, true
-		}
-		mcp.Gate().AuthorizeModule(req.SessionID, op.Module)
-	}
+	// 板块授权：第一次真正用到这个板块时连着这次调用一起问。
+	//
+	// **不能拆成两张卡片连着弹。** 每张卡片最多等 120 秒，两张就是 240 秒，
+	// 而 hook 那侧的 HTTP 超时只有 150 秒——首次使用某个板块时很容易直接超时降级。
+	// 合成一张也更贴「在请求特定功能的时候弹窗」：人要判断的本来就是
+	// 「要不要让它干这件事」，板块是这件事的上下文，不是另一个问题。
+	firstUse := !mcp.Gate().ModuleAuthorized(req.SessionID, op.Module)
 
 	allow := func(reason string) (Verdict, bool) {
+		if firstUse {
+			mcp.Gate().AuthorizeModule(req.SessionID, op.Module)
+		}
 		mcp.Gate().Record(req.SessionID, short, mcp.InputHash(req.Input), req.ToolUseID)
 		audit(req, op, "allow", reason)
 		return Verdict{Decision: DecideAllow}, true
 	}
 
-	if op.Risk == "read" {
+	// 已授权板块内的只读操作直接放行。未授权时连只读也要问——
+	// 否则「只读默认开放」等于开局就把整台机器的侦察能力给满：
+	// 有哪些库、哪些用户、装了什么，一个弹窗都不用。
+	if op.Risk == "read" && !firstUse {
 		return allow("只读")
 	}
 
@@ -83,6 +88,10 @@ func DecideMCP(req PermRequest) (Verdict, bool) {
 
 	card := req
 	card.Kind = "mcp"
+	card.FirstUse = firstUse
+	if firstUse {
+		card.OpCount, card.DestructiveCount = mcp.ModuleStats(op.Module)
+	}
 	card.Risk = op.Risk
 	card.Danger = op.Risk == "destructive"
 	card.CanAlways = op.Risk == "write" && !op.NoAlways
@@ -111,34 +120,13 @@ func DecideMCP(req PermRequest) (Verdict, bool) {
 		}
 		// 光回一个 denied，模型会转头用 Bash 直接干同一件事——
 		// 既绕过了限制，也绕过了审计。必须明说不要改道。
+		if firstUse {
+			reason = fmt.Sprintf("本会话未获授权使用「%s」板块。%s",
+				mcp.ModuleTitle(op.Module), reason)
+		}
 		return Verdict{Decision: DecideDeny,
 			Reason: reason + " 请不要改用命令行等其他方式绕过，先向用户说明你想做什么。"}, true
 	}
-}
-
-func denyModuleReason(module string) string {
-	return fmt.Sprintf(
-		"本会话未获授权使用「%s」板块，操作已取消。请让用户在面板上允许，"+
-			"不要改用命令行等其他方式绕过——那样既绕开了限制，也绕开了审计。",
-		mcp.ModuleTitle(module))
-}
-
-// askModule 弹一次板块授权卡片。
-func askModule(req PermRequest, op *mcp.Op) bool {
-	total, destructive := mcp.ModuleStats(op.Module)
-	card := req
-	// 板块卡片和随后的工具卡片是**两次**独立的询问，必须是两个 id。
-	// 复用同一个的话，多设备补发（PendingFor）和「谁先点算谁」的去重
-	// 都会把它们当成同一次决定。
-	card.ID = req.ID + ":module"
-	card.Kind = "module"
-	card.Module = op.Module
-	card.ModuleTitle = mcp.ModuleTitle(op.Module)
-	card.OpCount = total
-	card.DestructiveCount = destructive
-	card.Title = fmt.Sprintf("请求使用「%s」板块", card.ModuleTitle)
-	card.CanAlways = false
-	return Broker().Ask(card).Decision == DecideAllow
 }
 
 // -- 卡片文案 ---------------------------------------------------------------

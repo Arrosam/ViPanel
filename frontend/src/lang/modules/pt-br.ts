@@ -743,6 +743,7 @@ const message = {
             permDeny: 'Deny',
             permAsk: 'Back to terminal',
             permAlways: 'Always allow',
+            permFirstUse: 'Also authorizes the “{0}” section for the rest of this session.',
             permConfirmAgain: 'Click again to confirm',
             permDanger: 'Destructive operation. This cannot be undone.',
             permRawInput: 'Raw arguments',

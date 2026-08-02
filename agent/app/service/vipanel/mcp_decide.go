@@ -112,6 +112,16 @@ func DecideMCP(req PermRequest) (Verdict, bool) {
 			}
 		}
 		return allow("用户选择总是允许")
+	case DecideAsk:
+		// 超时（或有人点了「退回终端」）会走到这里。对普通工具来说退回终端是
+		// 合理的降级——TUI 那边还有个人能看见。但对面板操作**不是**：
+		// 就算人在终端里点了允许，这次调用也没有台账凭据，MCP 服务端会拒绝执行，
+		// 而它给出的理由是「权限代理不可用」——指向完全错误的方向。
+		// 所以这里直接给一个说得清的拒绝。
+		audit(req, op, "deny", "面板未在时限内作出决定")
+		return Verdict{Decision: DecideDeny,
+			Reason: "面板上没有人在时限内确认这次操作，已取消。" +
+				"请等用户回到面板后再试，不要改用命令行等其他方式绕过。"}, true
 	default:
 		audit(req, op, string(v.Decision), v.Reason)
 		reason := v.Reason

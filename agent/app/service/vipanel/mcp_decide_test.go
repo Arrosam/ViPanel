@@ -2,6 +2,7 @@ package vipanel
 
 import (
 	"encoding/json"
+	"os"
 	"strings"
 	"testing"
 
@@ -90,5 +91,20 @@ func TestDecideMCPRejectsUnknownVipanelTool(t *testing.T) {
 	}
 	if v.Decision != DecideDeny {
 		t.Errorf("目录外的工具应当拒绝，得到 %v", v.Decision)
+	}
+}
+
+// 面板操作不能降级成 ask。
+//
+// 对普通工具来说「退回终端」是合理降级——TUI 那边还有个人能看见。
+// 但面板操作就算在终端里被允许，也没有台账凭据，MCP 服务端会拒绝执行，
+// 而它给出的理由是「权限代理不可用」，指向完全错误的方向。
+func TestMCPNeverDegradesToAsk(t *testing.T) {
+	src, err := os.ReadFile("mcp_decide.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(src), "case DecideAsk:") {
+		t.Error("DecideMCP 必须显式处理 DecideAsk（超时/退回终端），不能让它落到默认分支")
 	}
 }

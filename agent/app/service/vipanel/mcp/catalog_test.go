@@ -148,3 +148,48 @@ func TestByNameMissReturnsNil(t *testing.T) {
 		}
 	}
 }
+
+// 板块入口的名字（<板块>_tools）不能和任何目录里的工具重名。
+//
+// 重名的话入口会**遮住**那个工具：tools/call 里先匹配 _tools 后缀，
+// 那个 op 就永远调不到了，而且不会有任何报错。
+func TestModuleEntryNamesDoNotShadowOps(t *testing.T) {
+	entries := map[string]bool{}
+	for _, m := range Modules {
+		entries[m.Key+"_tools"] = true
+	}
+	// 内建工具同理
+	entries["vipanel_overview"] = true
+	entries["vipanel_task"] = true
+
+	for _, op := range Catalog {
+		if entries[op.Name] {
+			t.Errorf("工具 %s 和板块入口/内建工具重名，会被永久遮住", op.Name)
+		}
+	}
+}
+
+// 每个板块都得有工具，否则 <板块>_tools 会被 moduleExists 判成不存在、
+// 于是那个名字既不是入口也不是工具，模型调它只会拿到「没有这个工具」。
+func TestEveryModuleHasOps(t *testing.T) {
+	for _, m := range Modules {
+		if len(ModuleOps(m.Key)) == 0 {
+			t.Errorf("板块 %s 一个工具都没有", m.Key)
+		}
+	}
+}
+
+// 常驻工具的数量是硬约束：它们绕过板块授权，等于开局就给出去的侦察能力。
+func TestResidentToolsStaySmall(t *testing.T) {
+	var n int
+	var names []string
+	for _, op := range Catalog {
+		if op.Resident {
+			n++
+			names = append(names, op.Name)
+		}
+	}
+	if n > 6 {
+		t.Errorf("常驻工具 %d 个（%v），超出预算——每加一个都要论证", n, names)
+	}
+}

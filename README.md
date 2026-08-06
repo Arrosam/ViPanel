@@ -1,3 +1,28 @@
+> ## ⚠️ 这是 ViPanel，不是 1Panel
+>
+> **ViPanel 是 [1Panel](https://github.com/1Panel-dev/1Panel) 的一个小规模改动版本。**
+> 修改者：Arrosam · 最近修改日期：2026-08-07 · 上游基线：`dev-v2`
+>
+> 在上游 1704 个文件里改动了 19 个（1.1%），删除 2 行，其余全部是新增文件。
+> 新增的只有一样东西：**AI 菜单下的「控制台」**——一个把 agent 直接跑在宿主机上
+> （而非容器里）的会话面板，配一套权限代理，以及让 agent 通过面板自己的接口
+> 操作这台服务器的 MCP 服务。上游其余的全部功能、界面和行为均未改动。
+>
+> 本项目与飞致云 / FIT2CLOUD 及 1Panel 官方**没有任何隶属关系**，也未获其背书。
+> 遵循上游的 GPL-3.0 协议。
+>
+> 详情见 **[VIPANEL.md](VIPANEL.md)**；装之前请先读 **[docs/trust-model.md](docs/trust-model.md)** ——
+> 一句话：能打开 ViPanel 控制台的人，约等于能在这台机器上以 root 执行任意命令。
+>
+> ---
+>
+> *This is ViPanel, a small-scale modification of 1Panel by Arrosam, last modified
+> 2026-08-07. 19 of 1704 upstream files changed (1.1%), 2 lines removed; everything
+> else is additive. Not affiliated with or endorsed by FIT2CLOUD or the 1Panel
+> project. Licensed under GPL-3.0, same as upstream. See [VIPANEL.md](VIPANEL.md).*
+
+---
+
 <p align="center"><a href="https://1panel.pro"><img src="https://resource.1panel.pro/img/1panel-logo.png" alt="1Panel" width="300" /></a></p>
 
 <h3 align="center">The open-source VPS control panel with native AI agent support</h3>

@@ -7,12 +7,39 @@
 
 ## 前提
 
-- Linux（开发验证在 Debian 12 / arm64 上做）
+- Linux，amd64 或 arm64
 - root
 - 目标机器上装好 `claude`：`npm i -g @anthropic-ai/claude-code`
   （agent 直接拉起宿主机上的 `claude`，不进容器 —— 进了容器它就管不了这台机器）
 
-## 一、构建
+## 一键装（推荐）
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Arrosam/ViPanel/main/scripts/get.sh | sudo sh
+```
+
+它会探测架构、下载对应的发布产物、**比对 sha256**、解压，然后调 `install.sh`。
+校验和不过就中止——这个脚本要把四个以 root 运行的二进制放进 `/usr/local/bin`，
+不比对就等于「网络上给什么就装什么」。
+
+不想走管道的话，从 [Releases](https://github.com/Arrosam/ViPanel/releases)
+下对应架构的 `.tar.gz`，自己核一遍 `SHA256SUMS`，解压后：
+
+```bash
+sudo sh scripts/install.sh
+```
+
+**下载量**：每个架构的 tar.gz 约 102MB（解压后 362MB，其中 `1panel-core`
+自己就占 277MB —— 前端整个 embed 在里面）。这是上游的形态，我们没动。
+
+**验证过的架构**：arm64（Debian 12 上做的全部真机验收）。
+amd64 能交叉编译并随发布产出，但**没有在真机上跑过** —— 用它请自己先验一遍。
+
+---
+
+## 自己构建（开发用）
+
+发布产物已经覆盖两种架构，下面这套只在改代码时需要。
 
 在开发机上：
 
@@ -25,13 +52,13 @@ cd agent && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -o ../build
 cd agent && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -o ../build/vipanel-mcp ./cmd/mcp
 ```
 
-`GOARCH` 按目标机器改（x86_64 用 `amd64`）。
+`GOARCH` 按目标机器改（x86_64 用 `amd64`）。发布流水线还会加
+`-ldflags '-s -w'`，但**别指望它解决体积**：实测只省 5%（core 292MB → 277MB），
+大头是 embed 进去的前端和一大堆 Go 依赖，不是调试信息。
 
 **前端必须用 `--mode production`。** `development` 模式的产物里有 Node 内置模块被
 externalize，入口 chunk 求值时抛错、`app.mount()` 永远不执行，页面停在转圈 ——
 而且**控制台一条错误都没有**（模块求值失败不进 console）。这个坑很难查。
-
-## 二、安装
 
 把 `build/` 和 `scripts/install.sh` 拷到目标机器，然后：
 

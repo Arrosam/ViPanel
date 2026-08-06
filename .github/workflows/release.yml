@@ -1,0 +1,130 @@
+# 发布流水线：出 amd64 和 arm64 两套可直接安装的产物。
+#
+# 在这之前「安装」的第一步是「在开发机上装 Go 和 Node 然后交叉编译」——
+# 那不是安装，那是让每个用户重做一遍构建。
+#
+# 这是个**新文件**，不改上游任何文件，不增加 rebase 冲突面。
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '版本号（如 v0.1.0）。不填则只构建不发布。'
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: agent/go.mod
+          cache-dependency-path: |
+            agent/go.sum
+            core/go.sum
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # 发版前先过一遍闸门。一个目录过期的版本比没有版本更糟：
+      # 它会让 agent 拿到一份和面板对不上的工具清单。
+      - name: MCP 工具目录未分类检查
+        working-directory: agent
+        run: go run ./cmd/mcpgen -root .. -check
+
+      - name: 目录是否为最新
+        working-directory: agent
+        run: |
+          go run ./cmd/mcpgen -root ..
+          git diff --exit-code -- app/service/vipanel/mcp/catalog.gen.go \
+            || { echo "catalog.gen.go 不是最新的"; exit 1; }
+
+      - name: 测试
+        working-directory: agent
+        run: go test ./app/service/vipanel/...
+
+      # **必须是 production 模式。**
+      # vite build --mode development 的产物跑不起来：某个 Node 内置模块被
+      # externalize，入口 chunk 求值时抛 "Module has been externalized"，
+      # app.mount() 永远不执行，页面停在 loading 转圈，而**控制台一条错误都没有**。
+      # 见 OhMyClaude/PORT-1PANEL.md §6.5「坑：构建模式」。
+      - name: 构建前端（产物 embed 进 core）
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build:pro
+
+      - name: 交叉编译两套架构
+        run: |
+          set -eux
+          VERSION="${GITHUB_REF_NAME:-dev}"
+          for ARCH in amd64 arm64; do
+            OUT="dist/vipanel-${VERSION}-linux-${ARCH}"
+            mkdir -p "$OUT/build" "$OUT/scripts" "$OUT/docs"
+
+            # -s -w 去掉符号表和调试信息。实测只省 5%（core 292MB → 277MB）——
+            # 大头是 embed 进去的前端和一大堆 Go 依赖，不是调试信息。
+            # 加它没坏处，但别指望它解决体积问题。用户实际下载的 tar.gz 约 102MB。
+            LD="-s -w"
+            ( cd core  && CGO_ENABLED=0 GOOS=linux GOARCH=$ARCH \
+                go build -trimpath -ldflags "$LD" -o "../$OUT/build/1panel-core"  ./cmd/server )
+            ( cd agent && CGO_ENABLED=0 GOOS=linux GOARCH=$ARCH \
+                go build -trimpath -ldflags "$LD" -o "../$OUT/build/1panel-agent" ./cmd/server )
+            ( cd agent && CGO_ENABLED=0 GOOS=linux GOARCH=$ARCH \
+                go build -trimpath -ldflags "$LD" -o "../$OUT/build/vipanel-hook" ./cmd/hook )
+            ( cd agent && CGO_ENABLED=0 GOOS=linux GOARCH=$ARCH \
+                go build -trimpath -ldflags "$LD" -o "../$OUT/build/vipanel-mcp"  ./cmd/mcp )
+
+            cp scripts/install.sh "$OUT/scripts/"
+            cp docs/install.md docs/trust-model.md "$OUT/docs/"
+            cp VIPANEL.md LICENSE "$OUT/"
+
+            tar -C dist -czf "dist/vipanel-${VERSION}-linux-${ARCH}.tar.gz" \
+                "vipanel-${VERSION}-linux-${ARCH}"
+            rm -rf "$OUT"
+          done
+          ( cd dist && sha256sum *.tar.gz > SHA256SUMS )
+          ls -la dist/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vipanel-dist
+          path: dist/
+
+      # 只有推 tag 才真的发版。workflow_dispatch 默认只构建，
+      # 好让人先确认产物没问题再打 tag。
+      - name: 发布
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/*.tar.gz dist/SHA256SUMS \
+            --title "$GITHUB_REF_NAME" \
+            --notes "$(cat <<'NOTES'
+          ViPanel 是 [1Panel](https://github.com/1Panel-dev/1Panel) 的小规模改动版本，
+          与飞致云 / FIT2CLOUD 及 1Panel 官方无隶属关系，遵循 GPL-3.0。
+          详见 [VIPANEL.md](https://github.com/Arrosam/ViPanel/blob/main/VIPANEL.md)。
+
+          ## 安装
+
+          ```sh
+          curl -fsSL https://raw.githubusercontent.com/Arrosam/ViPanel/main/scripts/get.sh | sudo sh
+          ```
+
+          或者下载对应架构的 tar.gz，解压后 `sudo sh scripts/install.sh`。
+
+          **装之前请先读 [docs/trust-model.md](https://github.com/Arrosam/ViPanel/blob/main/docs/trust-model.md)** ——
+          一句话：能打开 ViPanel 控制台的人，约等于能在这台机器上以 root 执行任意命令。
+          NOTES
+          )"

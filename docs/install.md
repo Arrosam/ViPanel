@@ -79,6 +79,20 @@ systemctl start vipanel-agent vipanel-core
 
 **页面一直转圈** — 前端用了 `development` 模式构建，见上面。
 
+**改完 agent 只重启 agent，结果面板打不开** — `vipanel-core.service` 里写着
+`Requires=vipanel-agent.service`，而 systemd 的 `Requires` 会**传播停止**：
+`systemctl stop vipanel-agent` 会把 core 一起收走，`Restart=always` 对
+「被正常停止」不生效，所以它不会自己回来。热更 agent 时要么两个一起重启：
+
+```bash
+systemctl restart vipanel-agent vipanel-core
+```
+
+要么停完 agent 之后补一句 `systemctl start vipanel-core`。
+**注意所有走 unix socket 的自测都绕过 core，看不出这个问题**——
+判断面板是否真的活着要看 `curl http://127.0.0.1:9999/` 的状态码，
+不能只看 `systemctl is-active vipanel-agent`。
+
 **设置里「面板操作能力」灰着点不动** — `/usr/local/bin/vipanel-mcp` 不存在或没有
 执行权限。它必须和 `1panel-agent` 同目录：面板按自己二进制的所在目录去找它。
 没有它，agent 仍能正常对话和操作这台机器，只是不能操作面板本身。

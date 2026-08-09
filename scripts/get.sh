@@ -10,6 +10,12 @@ set -e
 REPO="${REPO:-Arrosam/ViPanel}"
 VERSION="${VERSION:-latest}"
 
+# 下载源。留成可覆盖是为了三种情况：内网镜像、自建分发、以及发版前的验证。
+# 覆盖它不会跳过 sha256 校验——校验和是从同一个源取的，所以它防的是
+# 「传输过程中坏了」，不是「源本身不可信」。源可不可信由你选 BASE_URL 时决定。
+BASE_URL="${BASE_URL:-https://github.com/$REPO/releases/download}"
+API_URL="${API_URL:-https://api.github.com/repos/$REPO/releases/latest}"
+
 die() { echo "✗ $1" >&2; exit 1; }
 ok()  { echo "✓ $1"; }
 
@@ -39,14 +45,14 @@ command -v claude >/dev/null || cat <<'WARN'
 WARN
 
 if [ "$VERSION" = "latest" ]; then
-    VERSION=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" \
+    VERSION=$(curl -fsSL "$API_URL" \
         | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1)
     [ -n "$VERSION" ] || die "查不到最新版本，手工指定：VERSION=v0.1.0 sh get.sh"
 fi
 ok "版本 $VERSION"
 
 NAME="vipanel-${VERSION}-linux-${ARCH}"
-BASE="https://github.com/$REPO/releases/download/$VERSION"
+BASE="$BASE_URL/$VERSION"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 

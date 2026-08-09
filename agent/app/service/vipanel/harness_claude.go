@@ -393,7 +393,7 @@ func ensureOnboarded(cwd string) {
 	if err != nil {
 		return
 	}
-	_ = os.WriteFile(path, raw, 0o600)
+	_ = writeConfig(path, raw)
 }
 
 // claudeVersion 取「2.1.220」这样的版本号，取不到返回空串。
@@ -407,6 +407,43 @@ func claudeVersion() string {
 		return ""
 	}
 	return f[0]
+}
+
+// writeConfig 原子地写一个配置文件：先写同目录的临时文件，再 rename 覆盖。
+//
+// 直接 os.WriteFile 是「先截断再写」，中间有一个窗口能被读到半截文件。
+// 而 ~/.claude.json 是 claude 自己也在读写的——它随时可能在我们写到一半时去读。
+// 实测 20 次并发 spawn/exit 没撞出来（写 34KB 的窗口很短），
+// 但那是「撞不出来」不是「撞不了」。rename 在同一文件系统上是原子的，
+// 读者要么看到旧的完整文件、要么看到新的完整文件，没有中间态。
+//
+// 注意这解决不了「丢更新」：我们读-改-写的间隙里 claude 写了什么，
+// 会被我们的写覆盖掉。要根治那个得上文件锁，而 claude 并不参与任何锁协议，
+// 所以那一半只能接受——影响是它可能丢一条刚写的 project 记录，不致命。
+func writeConfig(path string, raw []byte) error {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(dir, ".vipanel-*")
+	if err != nil {
+		return err
+	}
+	name := tmp.Name()
+	defer os.Remove(name) // rename 成功后这个是空操作
+
+	if _, err := tmp.Write(raw); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Chmod(0o600); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(name, path)
 }
 
 // hookPath 是权限代理可执行体的位置。与 agent 二进制同目录。
@@ -506,7 +543,7 @@ func ensureMCP() {
 	cfg["mcpServers"] = servers
 
 	if raw, err := json.MarshalIndent(cfg, "", "  "); err == nil {
-		_ = os.WriteFile(path, raw, 0o600)
+		_ = writeConfig(path, raw)
 	}
 }
 
@@ -573,8 +610,7 @@ func (c claudeCode) AddAlwaysAllow(tool string) error {
 	if err != nil {
 		return err
 	}
-	_ = os.MkdirAll(filepath.Dir(p), 0o700)
-	return os.WriteFile(p, raw, 0o600)
+	return writeConfig(p, raw)
 }
 
 // ensureHook 把 PreToolUse 钩子写进 claude 的用户级 settings.json。
@@ -624,8 +660,7 @@ func ensureHook() {
 	cfg["hooks"] = hooks
 
 	if raw, err := json.MarshalIndent(cfg, "", "  "); err == nil {
-		_ = os.MkdirAll(dir, 0o700)
-		_ = os.WriteFile(path, raw, 0o600)
+		_ = writeConfig(path, raw)
 	}
 }
 

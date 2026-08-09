@@ -3,14 +3,11 @@
         <div class="flex w-full flex-col gap-2 md:flex-row items-center">
             <div class="flex flex-wrap gap-y-2 items-center">
                 <span v-if="props.footer">
-                    <el-link type="primary" underline="never" @click="toEdition" v-if="!isFxplay">
-                        <span class="font-normal">{{ $t('license.knowMorePro') }}</span>
-                    </el-link>
-                    <el-divider direction="vertical" />
-                    <el-link type="primary" underline="never" @click="toForum" v-if="!isFxplay">
-                        <span class="font-normal">{{ $t('setting.forum') }}</span>
-                    </el-link>
-                    <el-divider direction="vertical" v-if="!isFxplay" />
+                    <!-- ViPanel：去掉「了解商业版」和官方论坛。
+                         协议禁止暗示与飞致云存在关联，而一个改名的分发版还挂着它的
+                         商业版入口和社区入口，恰恰就是在暗示关联——删掉是降低风险。
+                         文档和项目地址留着：那是运行中这套软件的技术参考，
+                         指向上游也是正确的署名。 -->
                     <el-link type="primary" underline="never" @click="toDoc">
                         <span class="font-normal">{{ $t('setting.doc2') }}</span>
                     </el-link>
@@ -21,18 +18,8 @@
                     <el-divider direction="vertical" />
                 </span>
                 <div class="flex flex-wrap items-center">
-                    <el-link v-if="isEE" underline="never" type="primary" @click="toEdition">
-                        {{ $t('license.ee') }}
-                    </el-link>
-                    <el-link v-else-if="isMasterPro" underline="never" type="primary" @click="toLxware">
-                        {{ $t('license.pro') }}
-                    </el-link>
-                    <el-link v-else-if="isOffline" underline="never" type="primary" @click="to1Panel">
-                        {{ $t('license.offLine') }}
-                    </el-link>
-                    <el-link v-else underline="never" type="primary" @click="toEdition">
-                        {{ $t('license.community') }}
-                    </el-link>
+                    <!-- 版本标识保留文字、去掉外链：它是信息，不是入口 -->
+                    <span class="text-xs opacity-60 mr-1">{{ $t('license.community') }}</span>
                     <el-link underline="never" class="version" type="primary" @click="getVersionLog()">
                         {{ version }}
                     </el-link>

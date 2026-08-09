@@ -1,0 +1,21 @@
+<!--
+  ViPanel 的横版标。120x33，和它替换掉的那个同尺寸（侧栏展开态和「关于」页用它）。
+
+  左边是同一个方形标，右边是字。字用 <text> 而不是描成路径：
+  描 7 个字母的轮廓手工做出来只会难看，而这个 SVG 是 ?component 内联进页面的，
+  字体从页面上下文解析，和界面其余部分是同一套字。
+  代价是不同系统上字宽会有细微差别——对一个控制面板自己的标来说可以接受。
+
+  两边都用 currentColor，跟着主题走。
+-->
+<svg width="120" height="33" viewBox="0 0 120 33" fill="currentColor"
+     xmlns="http://www.w3.org/2000/svg">
+  <g fill-rule="evenodd" clip-rule="evenodd">
+    <path d="M6.4 3.5h11.2a5.4 5.4 0 0 1 5.4 5.4v11.2a5.4 5.4 0 0 1-5.4 5.4H6.4A5.4 5.4 0 0 1 1 20.1V8.9a5.4 5.4 0 0 1 5.4-5.4Z
+             M6 9.2h3.4l2.6 7.2 2.6-7.2h3.4l-4.3 11.4h-3.4L6 9.2Z"/>
+  </g>
+  <text x="30" y="21.5" font-size="17" font-weight="600" letter-spacing="-0.2"
+        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+                     'Hiragino Sans GB', 'Microsoft YaHei', Helvetica, Arial, sans-serif"
+  >ViPanel</text>
+</svg>

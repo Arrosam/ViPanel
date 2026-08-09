@@ -82,20 +82,6 @@
                         </el-link>
                     </el-form-item>
                     <el-form-item v-if="!isIntl && !isEnterprise && !isFxplay">
-                        <el-checkbox v-model="loginForm.agreeLicense">
-                            <template #default>
-                                <span class="agree-title">
-                                    {{ $t('commons.button.agree') }}
-                                    <a
-                                        class="agree"
-                                        href="https://www.fit2cloud.com/legal/licenses.html"
-                                        target="_blank"
-                                    >
-                                        {{ $t('commons.login.licenseHelper') }}
-                                    </a>
-                                </span>
-                            </template>
-                        </el-checkbox>
                     </el-form-item>
                 </div>
             </div>
@@ -197,46 +183,9 @@
                         <el-text v-if="isDemo" type="danger" class="demo">
                             {{ $t('commons.login.username') }}:demo {{ $t('commons.login.password') }}:1panel
                         </el-text>
-                        <el-form-item prop="agreeLicense" v-if="!isIntl && !isEnterprise && !isFxplay">
-                            <el-checkbox v-model="loginForm.agreeLicense">
-                                <template #default>
-                                    <span class="agree-title">
-                                        {{ $t('commons.button.agree') }}
-                                        <a
-                                            class="agree"
-                                            href="https://www.fit2cloud.com/legal/licenses.html"
-                                            target="_blank"
-                                        >
-                                            {{ $t('commons.login.licenseHelper') }}
-                                        </a>
-                                    </span>
-                                </template>
-                            </el-checkbox>
-                        </el-form-item>
                     </div>
                 </el-form>
             </div>
-
-            <DialogPro v-model="open" center size="w-90">
-                <el-row type="flex" justify="center">
-                    <span class="text-base mb-4">
-                        {{ $t('commons.login.agreeTitle') }}
-                    </span>
-                </el-row>
-                <div>
-                    <span v-html="$t('commons.login.agreeContent')"></span>
-                </div>
-                <template #footer>
-                    <span class="dialog-footer login-footer-btn">
-                        <el-button @click="open = false">
-                            {{ $t('commons.button.notAgree') }}
-                        </el-button>
-                        <el-button type="primary" @click="agreeWithLogin()">
-                            {{ $t('commons.button.agree') }}
-                        </el-button>
-                    </span>
-                </template>
-            </DialogPro>
         </div>
     </div>
 </template>
@@ -310,7 +259,12 @@ const loginForm = reactive({
     captcha: '',
     captchaID: '',
     authMethod: 'session',
-    agreeLicense: false,
+    // ViPanel 不向用户索取《飞致云社区软件许可协议》的同意：我们不是飞致云的代理人，
+    // 让本分发版的用户去接受一个与本次分发无关的第三方的条款说不通。
+    // 这个字段只是本地 UI 闸门（不发送到任何地方），置真即等同于上游
+    // 给 intl / enterprise 构建走的那条「不问」路径。
+    // 注意：这不改变商标条款对**分发者**的约束，那是 GPLv3 §7(e) 允许保留的附加条款。
+    agreeLicense: true,
     language: 'zh',
 });
 

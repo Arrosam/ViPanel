@@ -56,7 +56,6 @@
                     {{ $t('commons.button.power') }}
                 </el-button>
                 <div class="mt-3 mb-5">
-                    <el-button text type="primary" @click="toEdition">{{ $t('license.knowMorePro') }}</el-button>
                 </div>
             </div>
         </DialogPro>

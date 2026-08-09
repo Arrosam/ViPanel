@@ -29,10 +29,6 @@
                             <span>
                                 {{ $t(expiresAlertKey, [expiresInfo]) }}
                             </span>
-                            <span @click="goXpack" class="flex items-center justify-center gap-0.5 jump">
-                                <el-icon><Position /></el-icon>
-                                {{ $t('firewall.quickJump') }}
-                            </span>
                         </div>
                     </div>
                 </template>

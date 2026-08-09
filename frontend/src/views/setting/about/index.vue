@@ -46,7 +46,7 @@ import { getSystemAvailable } from '@/api/modules/setting';
 import { onMounted, ref } from 'vue';
 import SystemUpgrade from '@/components/system-upgrade/index.vue';
 import { useGlobalStore } from '@/composables/useGlobalStore';
-import PrimaryLogo from '@/assets/images/1panel-logo.svg?component';
+import PrimaryLogo from '@/assets/images/vipanel-logo.svg?component';
 const { docsUrl, themeConfig } = useGlobalStore();
 const loading = ref();
 const logoLoadFailed = ref(false);

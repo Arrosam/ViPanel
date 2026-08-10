@@ -23,9 +23,13 @@ export const getPool = () => http.get<ViPanel.Pool>(`/ai/console/pool`);
 
 export const updatePool = (size: number) => http.post<ViPanel.Pool>(`/ai/console/pool/update`, { size });
 
-export const getAgentAuth = () => http.get<ViPanel.AuthState>(`/ai/console/auth/status`);
+// 登录状态是**每个 harness 各一份**的：Claude 登录了不代表 Codex 登录了。
+// 不传就是默认 harness，和后端的 DefaultQuery 对齐。
+export const getAgentAuth = (harness?: string) =>
+    http.get<ViPanel.AuthState>(`/ai/console/auth/status${harness ? `?harness=${harness}` : ''}`);
 
-export const agentLogout = () => http.post(`/ai/console/auth/logout`, {});
+export const agentLogout = (harness?: string) =>
+    http.post(`/ai/console/auth/logout${harness ? `?harness=${harness}` : ''}`, {});
 
 export const resolvePermission = (id: string, decision: string, reason: string) =>
     http.post(`/ai/console/permission/resolve`, { id, decision, reason });

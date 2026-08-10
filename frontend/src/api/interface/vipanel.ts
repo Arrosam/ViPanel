@@ -7,6 +7,10 @@ export namespace ViPanel {
         models: string[];
         effortLevels: string[];
         commands: { name: string; desc: string }[];
+        // 登录方式由后端的 harness 声明。文案在 i18n 里按 id 取。
+        // needsCodeInput 决定码往哪个方向走：true 是浏览器给码、粘回终端；
+        // false 是终端给码、拿到别的设备上去输。
+        loginModes: { id: string; needsCodeInput: boolean }[];
     }
 
     export interface Session {
@@ -26,6 +30,8 @@ export namespace ViPanel {
     export interface Harness {
         id: string;
         displayName: string;
+        // 这台机器上装没装。没装就别让用户点进去撞墙。
+        installed: boolean;
         capabilities: Caps;
     }
 

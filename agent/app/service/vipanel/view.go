@@ -20,6 +20,10 @@ func toCaps(c Capabilities) dto.ViCaps {
 	if cmds == nil {
 		cmds = []Command{}
 	}
+	modes := c.LoginModes
+	if modes == nil {
+		modes = []LoginMode{}
+	}
 	return dto.ViCaps{
 		StructuredEvents: c.StructuredEvents,
 		Resume:           c.Resume,
@@ -28,6 +32,7 @@ func toCaps(c Capabilities) dto.ViCaps {
 		Models:           models,
 		EffortLevels:     efforts,
 		Commands:         cmds,
+		LoginModes:       modes,
 	}
 }
 
@@ -65,7 +70,8 @@ func Harnesses() []dto.ViHarnessItem {
 	out := make([]dto.ViHarnessItem, 0, len(hs))
 	for _, h := range hs {
 		out = append(out, dto.ViHarnessItem{
-			ID: h.ID(), DisplayName: h.DisplayName(), Caps: toCaps(h.Capabilities()),
+			ID: h.ID(), DisplayName: h.DisplayName(),
+			Installed: Installed(h), Caps: toCaps(h.Capabilities()),
 		})
 	}
 	return out

@@ -1,5 +1,11 @@
 package vipanel
 
+import (
+	"os"
+	"os/exec"
+	"path/filepath"
+)
+
 // Harness 是面板和具体 agent（Claude Code / 别的什么）之间**唯一**的接缝。
 //
 // 这套接口的设计原则是：能力**声明**，不靠失败去探测。
@@ -13,6 +19,13 @@ type Harness interface {
 	ID() string
 	DisplayName() string
 	Capabilities() Capabilities
+
+	// Binary 是这个 harness 要执行的命令名，用来判断它在这台机器上装没装。
+	//
+	// 单独一个方法而不是从 Spawn 返回的 PtySpec 里读：Spawn **有副作用**
+	// （claude 那侧会写向导标记、装钩子、装 MCP），为了问一句「装了吗」
+	// 去跑一遍那些副作用是错的。
+	Binary() string
 
 	// Spawn 返回启动这个 agent 所需的命令。resume 为真时要接回原有对话。
 	Spawn(ctx SpawnContext) PtySpec
@@ -46,11 +59,29 @@ type Capabilities struct {
 	// Commands 是这个 harness 支持的斜杠命令。由 harness **声明**，
 	// 不是前端硬编码——换一个 harness 命令列表就该跟着换。
 	Commands []Command `json:"commands"`
+	// LoginModes 是这个 harness 有哪几种登录方式。
+	//
+	// 登录对话框上那两个单选钮原来是写死的 claudeai / console —— 那是 Claude
+	// 独有的两种登录入口，Codex 一种都没有。**有哪些方式、每种长什么样**
+	// 是 harness 的知识，由这里声明；**每种方式叫什么**是文案，留在前端的 i18n 里。
+	LoginModes []LoginMode `json:"loginModes"`
 }
 
 type Command struct {
 	Name string `json:"name"`
 	Desc string `json:"desc"`
+}
+
+// LoginMode 是一种登录方式。ID 同时是前端取文案的 i18n 键。
+type LoginMode struct {
+	ID string `json:"id"`
+	// NeedsCodeInput 决定对话框末尾那个「把授权码粘回来」的输入框出不出现。
+	//
+	// 这两类流程的**码是反方向走的**，搞混了界面就会要用户去粘一个根本不存在
+	// 的东西：
+	//   - true —— 浏览器给码，用户粘回终端（Claude 的两种方式都是这样）
+	//   - false —— 终端给码，用户拿到别的设备上去输（Codex 的设备码授权）
+	NeedsCodeInput bool `json:"needsCodeInput"`
 }
 
 type SpawnContext struct {
@@ -75,6 +106,23 @@ func Get(id string) Harness {
 		return h
 	}
 	return registry[DefaultHarness]
+}
+
+// Installed 判断一个 harness 在这台机器上装没装。
+//
+// 没装的东西不该在界面上表现得可以用：点了新建会话，进程起不来，
+// 用户看到的是一个空终端和一句看不懂的报错。
+func Installed(h Harness) bool {
+	bin := h.Binary()
+	if bin == "" {
+		return false
+	}
+	if filepath.IsAbs(bin) {
+		st, err := os.Stat(bin)
+		return err == nil && !st.IsDir()
+	}
+	_, err := exec.LookPath(bin)
+	return err == nil
 }
 
 func List() []Harness {
@@ -123,6 +171,32 @@ func AutoAllowed(sessionID, tool string) bool {
 	}
 	a, ok := s.Harness.(AutoAllower)
 	return ok && a.AutoAllow(tool)
+}
+
+// PermissionDialect 由「钩子的决定词表和默认不一样」的 harness 实现。
+//
+// 面板等不到人做决定时该回什么，是 harness 特有的：
+//   - Claude 的 PreToolUse 认 allow / deny / ask，可以退回 ask 让 TUI 自己问，
+//     那边至少还有个人能看见。
+//   - Codex 的 PreToolUse 只认 allow / deny，没有 ask 这一档，退无可退。
+//
+// 不实现这个接口的 harness 一律用 ask —— 保持原有行为不变。
+type PermissionDialect interface {
+	// TimeoutDecision 是面板在时限内没等到人时该给出的决定。
+	TimeoutDecision() Decision
+}
+
+// timeoutDecisionFor 问某个会话的 harness：等不到人时回什么。
+// 会话不在或没实现这个接口时退回 ask —— 那是原来的行为。
+func timeoutDecisionFor(sessionID string) Decision {
+	s, ok := M().Get(sessionID)
+	if !ok {
+		return DecideAsk
+	}
+	if d, ok := s.Harness.(PermissionDialect); ok {
+		return d.TimeoutDecision()
+	}
+	return DecideAsk
 }
 
 // TitleSource 由「自己会给会话起标题」的 harness 实现。

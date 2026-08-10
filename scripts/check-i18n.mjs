@@ -25,10 +25,31 @@ const walk = (d) => {
 };
 VIEW_DIRS.forEach(walk);
 
+// 登录方式的 id 由后端的 harness 声明（Capabilities.LoginModes），
+// 前端按 id 去 i18n 里取文案。**从 Go 源码里读，不在这里抄一份**——
+// 抄一份的话，加一个 harness 时这个检查会安静地放过它，
+// 而放过缺失的翻译正是这个脚本唯一要防的事。
+function loginModesFromGo() {
+    const dir = 'agent/app/service/vipanel';
+    const ids = new Set();
+    for (const f of fs.readdirSync(dir).filter((f) => f.startsWith('harness_'))) {
+        const src = fs.readFileSync(path.join(dir, f), 'utf8');
+        const at = src.indexOf('LoginModes:');
+        if (at < 0) continue;
+        // 只扫这个字段后面那一小段，避免把别处的 ID: 也吃进来
+        for (const m of src.slice(at, at + 600).matchAll(/\bID:\s*"([^"]+)"/g)) ids.add(m[1]);
+    }
+    // 每种方式都要有标题和说明两条文案
+    return [...ids].flatMap((id) => [id, id + 'Note']);
+}
+
 // 模板字符串里的动态键（如 `aiTools.console.status.${s.status}`）
-// 会被上面的正则抓成 "status."。展开成后端 SessionStatus 的全部取值——
+// 会被上面的正则抓成 "status."。展开成后端的全部取值——
 // 这类键最容易漏，而且漏了以后界面上直接显示 aiTools.console.status.working。
-const DYNAMIC = { 'status.': ['idle', 'working', 'unread', 'sleeping', 'error'] };
+const DYNAMIC = {
+    'status.': ['idle', 'working', 'unread', 'sleeping', 'error'],
+    'loginMode.': loginModesFromGo(),
+};
 for (const [prefix, members] of Object.entries(DYNAMIC)) {
     if (!used.delete(prefix)) continue;
     for (const m of members) used.add(prefix + m);

@@ -8,7 +8,7 @@
             show-icon
         >
             <span>{{ $t('aiTools.console.notLoggedIn') }}</span>
-            <el-button link type="primary" size="small" @click="loginRef?.open()">
+            <el-button link type="primary" size="small" @click="loginRef?.open(authHarness)">
                 {{ $t('aiTools.console.loginNow') }}
             </el-button>
         </el-alert>
@@ -114,7 +114,7 @@
         <Permission :req="perm" />
         <History ref="historyRef" @opened="onHistoryOpened" />
         <DirPicker ref="dirPickerRef" @created="onHistoryOpened" />
-        <Settings ref="settingsRef" @changed="refresh(); loadAuth()" @login="loginRef?.open()" />
+        <Settings ref="settingsRef" @changed="refresh(); loadAuth()" @login="(h) => loginRef?.open(h)" />
     </div>
 </template>
 
@@ -228,13 +228,22 @@ const applyTitle = (evs: any[], sid: string) => {
     if (s) s.title = last.text;
 };
 
+// 横幅问的是**当前会话那个 harness** 的登录状态，不是默认那个。
+//
+// 只问默认 harness 的话，一个没登录的 Codex 会话不会有任何提示——
+// 用户看到的是一个停在登录选择器上的终端，和一个说「一切正常」的界面。
+const authHarness = computed(() => currentSession.value?.harness || '');
+
 const loadAuth = async () => {
     try {
-        auth.value = (await getAgentAuth()).data;
+        auth.value = (await getAgentAuth(authHarness.value || undefined)).data;
     } catch {
         /* 取不到就当支持且已登录，别用一个横幅挡住整个界面 */
     }
 };
+
+// 切到别的会话就重新问一次——两个 harness 的登录状态是各自独立的。
+watch(authHarness, () => loadAuth());
 
 const refresh = async () => {
     const [ls, p] = await Promise.all([listSessions(), getPool()]);

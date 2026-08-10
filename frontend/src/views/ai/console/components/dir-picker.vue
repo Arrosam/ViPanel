@@ -27,6 +27,18 @@
             <el-empty v-if="!loading && !dirs.length && !parent" :image-size="44" :description="$t('aiTools.console.noSubdir')" />
         </div>
 
+        <!-- 用哪个 harness 建会话。
+             只列装了的：没装的选项点下去只会得到一个空终端和一句看不懂的报错。
+             只有一个可选时整行不出现——一个没得选的选择器是纯噪音。 -->
+        <div v-if="usable.length > 1" class="vp-dp__harness">
+            <span class="vp-dp__hlabel">{{ $t('aiTools.console.harnessPick') }}</span>
+            <el-radio-group v-model="harness" size="small">
+                <el-radio-button v-for="h in usable" :key="h.id" :value="h.id">
+                    {{ h.displayName }}
+                </el-radio-button>
+            </el-radio-group>
+        </div>
+
         <template #footer>
             <span class="vp-dp__here">{{ here }}</span>
             <el-button @click="visible = false">{{ $t('aiTools.console.cancel') }}</el-button>
@@ -41,7 +53,8 @@
 import { computed, ref } from 'vue';
 import { Folder, Top } from '@element-plus/icons-vue';
 import { getFilesList } from '@/api/modules/files';
-import { createSession } from '@/api/modules/vipanel';
+import { createSession, listHarnesses } from '@/api/modules/vipanel';
+import { ViPanel } from '@/api/interface/vipanel';
 import { MsgError } from '@/utils/message';
 
 const emit = defineEmits<{ (e: 'created', id: string): void }>();
@@ -50,6 +63,10 @@ const visible = ref(false);
 const loading = ref(false);
 const here = ref('');
 const dirs = ref<any[]>([]);
+const harnesses = ref<ViPanel.Harness[]>([]);
+const harness = ref('');
+
+const usable = computed(() => harnesses.value.filter((h) => h.installed));
 
 const parent = computed(() => {
     if (!here.value || here.value === '/') return '';
@@ -89,11 +106,25 @@ const open = (from?: string) => {
     visible.value = true;
     dirs.value = [];
     go(from || '/');
+    loadHarnesses();
+};
+
+const loadHarnesses = async () => {
+    try {
+        harnesses.value = (await listHarnesses()).data || [];
+    } catch {
+        harnesses.value = [];
+    }
+    // 选一个真的能用的。取不到列表时留空，让后端用它自己的默认 harness——
+    // 前端猜一个 id 传过去，猜错了就是一个建不出来的会话。
+    if (!usable.value.some((h) => h.id === harness.value)) {
+        harness.value = usable.value.find((h) => h.id === 'claude-code')?.id || usable.value[0]?.id || '';
+    }
 };
 
 const create = async () => {
     try {
-        const res = await createSession({ cwd: here.value });
+        const res = await createSession({ cwd: here.value, harness: harness.value || undefined });
         visible.value = false;
         emit('created', res.data.id);
     } catch (e: any) {
@@ -152,6 +183,18 @@ defineExpose({ open });
 }
 .vp-dp__ic {
     color: var(--el-color-primary);
+}
+.vp-dp__harness {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-top: 10px;
+    margin-top: 6px;
+    border-top: 1px solid var(--el-border-color-lighter);
+}
+.vp-dp__hlabel {
+    font-size: 12px;
+    color: var(--el-text-color-secondary);
 }
 .vp-dp__here {
     float: left;

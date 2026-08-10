@@ -30,8 +30,12 @@ func (claudeCode) Capabilities() Capabilities {
 		Resume:           true,
 		Interrupt:        true,
 		Auth:             true,
-		Models:           []string{"fable", "opus", "sonnet", "haiku"},
-		EffortLevels:     []string{"low", "medium", "high", "xhigh", "max"},
+		LoginModes: []LoginMode{
+			{ID: "claudeai", NeedsCodeInput: true},
+			{ID: "console", NeedsCodeInput: true},
+		},
+		Models:       []string{"fable", "opus", "sonnet", "haiku"},
+		EffortLevels: []string{"low", "medium", "high", "xhigh", "max"},
 		Commands: []Command{
 			{"/model", "切换模型"},
 			{"/effort", "切换推理强度"},
@@ -46,6 +50,8 @@ func (claudeCode) Capabilities() Capabilities {
 		},
 	}
 }
+
+func (claudeCode) Binary() string { return "claude" }
 
 // Spawn：首次用 --session-id 指定 id，之后用 --resume 接回。
 //
@@ -170,6 +176,10 @@ type shellHarness struct{}
 func (shellHarness) ID() string                 { return "shell" }
 func (shellHarness) DisplayName() string        { return "Shell" }
 func (shellHarness) Capabilities() Capabilities { return Capabilities{} }
+
+// Binary 是用户自己的登录 shell。这台机器上一定有——它是 shellHarness
+// 存在的前提，也是「全 false 的能力表也能跑」这个证伪件的最后一格。
+func (shellHarness) Binary() string { return LoginShell() }
 
 func (shellHarness) Spawn(ctx SpawnContext) PtySpec {
 	return PtySpec{File: LoginShell(), Cwd: ctx.Cwd, Env: ctx.Env, Cols: ctx.Cols, Rows: ctx.Rows}

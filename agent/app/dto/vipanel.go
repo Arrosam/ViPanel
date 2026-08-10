@@ -23,12 +23,15 @@ type ViCaps struct {
 	Models           []string `json:"models"`
 	EffortLevels     []string `json:"effortLevels"`
 	Commands         any      `json:"commands"`
+	LoginModes       any      `json:"loginModes"`
 }
 
 type ViHarnessItem struct {
 	ID          string `json:"id"`
 	DisplayName string `json:"displayName"`
-	Caps        ViCaps `json:"capabilities"`
+	// Installed 为 false 时界面必须把它标成不可用，而不是让用户点进去撞墙。
+	Installed bool   `json:"installed"`
+	Caps      ViCaps `json:"capabilities"`
 }
 
 type ViSessionCreate struct {

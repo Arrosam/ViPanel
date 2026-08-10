@@ -120,8 +120,15 @@ func (b *broker) Ask(req PermRequest) Verdict {
 	select {
 	case v = <-p.done:
 	case <-time.After(decisionTimeout):
-		// 超时不能放行。退回终端让 TUI 自己问——那边至少有个人能看见。
-		v = Verdict{Decision: DecideAsk, Reason: "面板等待超时，已退回终端确认"}
+		// 超时**绝不能放行**。至于退回什么，取决于这个 harness 的钩子认什么：
+		// Claude 可以退回终端让 TUI 自己问；Codex 只认 allow/deny，只能拒绝。
+		// 见 PermissionDialect。
+		d := timeoutDecisionFor(req.SessionID)
+		reason := "面板等待超时，已退回终端确认"
+		if d == DecideDeny {
+			reason = "面板在时限内没有人确认，已拒绝。请回到面板重试。"
+		}
+		v = Verdict{Decision: d, Reason: reason}
 		global.LOG.Infof("vipanel: 权限请求 %s 超时，降级为 ask", req.ID)
 	}
 

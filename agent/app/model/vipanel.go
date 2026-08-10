@@ -14,6 +14,9 @@ type ViSession struct {
 	Cwd       string `json:"cwd"`
 	Harness   string `json:"harness"`
 	LastUsed  int64  `json:"lastUsed"` // 毫秒时间戳，决定实例池的 LRU 顺序
+	// TitlePinned 为真表示标题是人定的，agent 自动生成的标题不得覆盖它。
+	// 必须落库：只放内存里的话，重启一次用户改的名字就被下一个 ai-title 冲掉了。
+	TitlePinned bool `json:"titlePinned"`
 }
 
 func (ViSession) TableName() string {

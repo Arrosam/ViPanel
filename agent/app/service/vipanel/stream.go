@@ -1,6 +1,7 @@
 package vipanel
 
 import (
+	"github.com/1Panel-dev/1Panel/agent/global"
 	"strings"
 	"sync"
 	"time"
@@ -57,8 +58,8 @@ func (s *Session) ensureStream() {
 		return
 	}
 	// 先同步读完历史再从末尾接着 tail
-	st.hist = ReadTranscript(path)
-	st.tail = NewTailer(path, true)
+	st.hist = ReadTranscript(path, s.Harness)
+	st.tail = NewTailer(path, true, s.Harness)
 	st.ready = true
 	st.mu.Unlock()
 
@@ -80,11 +81,20 @@ func (s *Session) onEvents(evs []Event) {
 	st.mu.Unlock()
 
 	for _, e := range evs {
-		if e.Type == EvAssistant {
+		switch e.Type {
+		case EvAssistant:
 			s.mu.Lock()
 			s.awaitingReply = false
 			s.unread = true
 			s.mu.Unlock()
+		case EvTitle:
+			// 这里以前是空的：标题事件被解析出来、广播出去，然后没人管。
+			// 加上「谁都不消费」和上游字段名读错，是「会话标题不会自动更新」的全部原因。
+			if s.applyTitle(e.Text, e.Manual) {
+				if err := persistTitle(s.ID, s.Title, e.Manual); err != nil {
+					global.LOG.Warnf("vipanel: 落库会话标题失败: %v", err)
+				}
+			}
 		}
 	}
 
@@ -207,8 +217,8 @@ func (s *Session) waitTranscript() {
 			continue
 		}
 
-		hist := ReadTranscript(path)
-		tail := NewTailer(path, true)
+		hist := ReadTranscript(path, s.Harness)
+		tail := NewTailer(path, true, s.Harness)
 
 		st.mu.Lock()
 		st.hist = hist

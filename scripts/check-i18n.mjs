@@ -6,7 +6,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const LANG_DIR = 'frontend/src/lang/modules';
-const VIEW_DIR = 'frontend/src/views/ai/console';
+// 所有会用到 aiTools.console.* 的 ViPanel 界面。
+//
+// 一开始只扫控制台那一个目录，结果登录页的品牌文案加进去之后**完全没被检查到**——
+// 这个脚本存在的意义就是防「键缺了但没人发现」，它自己漏扫是最讽刺的失败方式。
+// 新增 ViPanel 界面时记得把目录加进来。
+const VIEW_DIRS = ['frontend/src/views/ai/console', 'frontend/src/views/login'];
 
 // 从源码里收集所有 aiTools.console.* 的用法
 const used = new Set();
@@ -18,7 +23,7 @@ const walk = (d) => {
         for (const m of src.matchAll(/aiTools\.console\.([\w.]+)/g)) used.add(m[1]);
     }
 };
-walk(VIEW_DIR);
+VIEW_DIRS.forEach(walk);
 
 // 模板字符串里的动态键（如 `aiTools.console.status.${s.status}`）
 // 会被上面的正则抓成 "status."。展开成后端 SessionStatus 的全部取值——

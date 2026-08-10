@@ -2,6 +2,7 @@ package vipanel
 
 import (
 	"errors"
+	"strings"
 	"sync"
 	"time"
 
@@ -22,10 +23,11 @@ var (
 	errNotSupported = errors.New("当前 harness 不支持这个操作")
 )
 
-func newSession(id, title, cwd string, h Harness, lastUsed int64) *Session {
+func newSession(id, title, cwd string, h Harness, lastUsed int64, titlePinned bool) *Session {
 	return &Session{
 		ID: id, Title: title, Cwd: cwd, Harness: h, lastUsed: lastUsed,
-		stream: newStream(), screen: newMirror(),
+		titlePinned: titlePinned,
+		stream:      newStream(), screen: newMirror(),
 	}
 }
 
@@ -58,6 +60,37 @@ type Session struct {
 	awaitingReply bool
 	unread        bool
 	lastUsed      int64
+	// titlePinned：标题是人定的，agent 自动起的标题不许覆盖。
+	titlePinned bool
+}
+
+// applyTitle 收下 agent 自动生成或用户手工设定的标题。
+//
+// 规则只有一条：**人定的压过自动的，而且一旦人定过就不再被自动的覆盖。**
+// 不这样的话，用户刚改完名字，下一轮对话 agent 重新起个标题就把它冲掉了。
+//
+// 返回 true 表示标题确实变了（调用方据此决定要不要落库和广播）。
+func (s *Session) applyTitle(title string, manual bool) bool {
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return false
+	}
+	if len([]rune(title)) > 80 {
+		title = string([]rune(title)[:80])
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.titlePinned && !manual {
+		return false
+	}
+	if s.Title == title && s.titlePinned == manual {
+		return false
+	}
+	s.Title = title
+	if manual {
+		s.titlePinned = true
+	}
+	return true
 }
 
 func (s *Session) Status() SessionStatus {

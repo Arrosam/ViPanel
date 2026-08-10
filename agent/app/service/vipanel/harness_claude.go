@@ -94,6 +94,41 @@ func (claudeCode) HasHistory(sessionID, _ string) bool {
 	return transcriptPath(sessionID) != ""
 }
 
+// TitleOf 从 transcript 的一行里取会话标题。
+//
+// 字段名是**实测**来的，不是照着类型名类推的（上一版就是类推错的）：
+//
+//	{"type":"ai-title","aiTitle":"查询当前effort和模型配置","sessionId":"..."}
+//
+// custom-title 的字段名手头没有样本，所以 customTitle 和 title 都认——
+// 多认一个键的成本是零，而认错的代价是这个功能整个静默失效。
+func (claudeCode) TitleOf(line []byte) (string, bool) {
+	var r struct {
+		Type        string `json:"type"`
+		AITitle     string `json:"aiTitle"`
+		CustomTitle string `json:"customTitle"`
+		Title       string `json:"title"`
+	}
+	if json.Unmarshal(line, &r) != nil {
+		return "", false
+	}
+	switch r.Type {
+	case "custom-title":
+		for _, v := range []string{r.CustomTitle, r.Title} {
+			if v != "" {
+				return v, true // 用户手工定的，压过 AI 起的
+			}
+		}
+	case "ai-title":
+		for _, v := range []string{r.AITitle, r.Title} {
+			if v != "" {
+				return v, false
+			}
+		}
+	}
+	return "", false
+}
+
 func projectsDir() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -238,10 +273,8 @@ func peek(path string) *Discovered {
 				continue
 			}
 			var r struct {
-				Type        string `json:"type"`
-				Cwd         string `json:"cwd"`
-				CustomTitle string `json:"customTitle"`
-				Title       string `json:"title"`
+				Type string `json:"type"`
+				Cwd  string `json:"cwd"`
 			}
 			if json.Unmarshal([]byte(line), &r) != nil {
 				continue // 头尾截断处必然有半行，跳过
@@ -249,17 +282,15 @@ func peek(path string) *Discovered {
 			if cwd == "" && r.Cwd != "" {
 				cwd = r.Cwd
 			}
-			switch r.Type {
-			case "custom-title":
-				if r.CustomTitle != "" {
-					title = r.CustomTitle
-				}
-			case "ai-title":
-				if title == "" && r.Title != "" {
-					title = r.Title
-				}
-			case "assistant":
+			if r.Type == "assistant" {
 				hasConversation = true
+			}
+			// 标题走同一个实现，不在这里再解析一遍——
+			// 上一版就是因为这里和 transcript.go 各写各的，同一个字段名错了两处
+			if t, manual := (claudeCode{}).TitleOf([]byte(line)); t != "" {
+				if manual || title == "" {
+					title = t
+				}
 			}
 		}
 	}

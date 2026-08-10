@@ -29,7 +29,7 @@ func Restore() {
 		if st, err := os.Stat(r.Cwd); err != nil || !st.IsDir() {
 			continue
 		}
-		M().Put(newSession(r.SessionID, r.Title, r.Cwd, Get(r.Harness), r.LastUsed))
+		M().Put(newSession(r.SessionID, r.Title, r.Cwd, Get(r.Harness), r.LastUsed, r.TitlePinned))
 		n++
 	}
 	if n > 0 {
@@ -50,7 +50,10 @@ func Create(cwd, title, harnessID string) (*Session, error) {
 	}
 	h := Get(harnessID)
 
-	s := newSession(uuid.NewString(), title, cwd, h, time.Now().UnixMilli())
+	// 新建时的标题**不算人定的**：它默认就是目录名，是个占位。
+	// agent 起了更贴切的标题就该替换掉——这正是用户要的「自动更新」。
+	// 只有走 Rename 才算人定。
+	s := newSession(uuid.NewString(), title, cwd, h, time.Now().UnixMilli(), false)
 	row := model.ViSession{
 		SessionID: s.ID, Title: s.Title, Cwd: s.Cwd,
 		Harness: h.ID(), LastUsed: s.lastUsed,
@@ -74,9 +77,17 @@ func Rename(id, title string) error {
 	if !ok {
 		return errors.New("会话不存在")
 	}
-	s.Title = title
+	// 手工改名一律算人定：从此 agent 自动起的标题不再覆盖它
+	s.applyTitle(title, true)
+	return persistTitle(id, title, true)
+}
+
+// persistTitle 落库。标题和「是不是人定的」必须一起写：
+// 只写标题的话，重启后 pinned 丢失，下一个自动标题就把用户改的名字冲掉了。
+func persistTitle(id, title string, pinned bool) error {
 	return global.DB.Model(&model.ViSession{}).
-		Where("session_id = ?", id).Update("title", title).Error
+		Where("session_id = ?", id).
+		Updates(map[string]any{"title": title, "title_pinned": pinned}).Error
 }
 
 func Delete(id string) error {
@@ -174,7 +185,7 @@ func OpenHistory(id, cwd, title string) (*Session, error) {
 		title = filepath.Base(cwd)
 	}
 	h := Get(DefaultHarness)
-	s := newSession(id, title, cwd, h, time.Now().UnixMilli())
+	s := newSession(id, title, cwd, h, time.Now().UnixMilli(), false)
 	row := model.ViSession{
 		SessionID: id, Title: title, Cwd: cwd, Harness: h.ID(), LastUsed: s.lastUsed,
 	}

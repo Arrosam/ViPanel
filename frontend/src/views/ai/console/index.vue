@@ -217,6 +217,17 @@ let evToken = 0;
 
 const currentSession = computed(() => sessions.value.find((s) => s.id === current.value));
 
+// agent 自己给会话起的标题。后端已经落库了，这里只是让列表**立刻**跟上——
+// 不然要等下一次 refresh 才看得到，用户会以为没生效。
+//
+// 取最后一条：一段对话里 agent 可能重新起过标题，最新的那个才作数。
+const applyTitle = (evs: any[], sid: string) => {
+    const last = (evs || []).filter((e) => e?.type === 'title' && e.text).pop();
+    if (!last) return;
+    const s = sessions.value.find((x) => x.id === sid);
+    if (s) s.title = last.text;
+};
+
 const loadAuth = async () => {
     try {
         auth.value = (await getAgentAuth()).data;
@@ -307,8 +318,13 @@ const connectEvents = (id: string) => {
     ws.onmessage = (ev) => {
         if (token !== evToken) return; // 迟到的旧会话消息，丢弃
         const msg = JSON.parse(ev.data);
-        if (msg.type === 'history') events.value = msg.events || [];
-        else if (msg.type === 'events') events.value.push(...(msg.events || []));
+        if (msg.type === 'history') {
+            events.value = msg.events || [];
+            applyTitle(msg.events, id);
+        } else if (msg.type === 'events') {
+            events.value.push(...(msg.events || []));
+            applyTitle(msg.events, id);
+        }
         else if (msg.type === 'permission_request') perm.value = msg.request;
         else if (msg.type === 'permission_resolved') {
             // 别的设备先点了，这边的弹窗要立刻收起，不能让人做第二次决定

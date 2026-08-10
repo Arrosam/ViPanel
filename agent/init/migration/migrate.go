@@ -97,6 +97,7 @@ func InitAgentDB() {
 		migrations.AddFtpIdentity,
 		migrations.AddComposePinned,
 		migrations.AddViSessionTable,
+		migrations.AddViSessionTitlePinned,
 	})
 	if err := m.Migrate(); err != nil {
 		global.LOG.Error(err)

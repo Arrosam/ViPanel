@@ -125,6 +125,21 @@ func AutoAllowed(sessionID, tool string) bool {
 	return ok && a.AutoAllow(tool)
 }
 
+// TitleSource 由「自己会给会话起标题」的 harness 实现。
+//
+// **标题藏在 harness 私有的记录格式里，字段名是它的私有知识。**
+// 这个接口存在的直接原因就是一个真实的 bug：通用代码曾经自己去猜那个字段名，
+// transcript.go 和 harness_claude.go 的 peek() 各猜了一遍、都猜成 "title"，
+// 而 claude 实际写的是 "aiTitle"。两处都静默失败——一处没有消费者所以不报错，
+// 另一处有目录名兜底所以看不出来，于是「会话标题不会自动更新」这件事一直像是设计如此。
+//
+// 猜错一次是失误，猜错两次是结构问题：这类知识不该有第二份拷贝。
+type TitleSource interface {
+	// TitleOf 从一行原始记录里取标题，取不到返回空串。
+	// manual 为 true 表示这是用户手工定的标题——它应当压过自动生成的那个。
+	TitleOf(line []byte) (title string, manual bool)
+}
+
 // PermissionStore 由「自己有一份权限规则配置」的 harness 实现。
 //
 // 「总是允许」的名单必须由**我们的钩子**来认——实测过，把工具写进

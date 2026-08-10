@@ -124,8 +124,10 @@ const uploaderFiles = ref<UploadFiles>([]);
 const licenseInfo = reactive({
     deviceID: '',
 });
-const defaultLoginImage = new URL('@/assets/images/1panel-login-enterprise.png', import.meta.url).href;
-const defaultLoginBgImage = new URL('@/assets/images/1panel-login-bg.jpg', import.meta.url).href;
+// ViPanel：不再引上游的品牌图（见 VIPANEL.md）。这页只在企业版授权缺失时出现，
+// 而本分发版只做社区版单节点，所以留空即可——用户自己配的图仍然生效。
+const defaultLoginImage = '';
+const defaultLoginBgImage = '';
 const loadedLoginImage = ref<string | null>(null);
 const loadedBackgroundImage = ref<string | null>(null);
 const backgroundStyle = ref<{ backgroundImage?: string; backgroundColor?: string }>({});

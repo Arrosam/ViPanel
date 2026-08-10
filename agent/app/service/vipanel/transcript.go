@@ -29,6 +29,9 @@ type Event struct {
 	ID      string `json:"id,omitempty"`    // tool_use id，用来把结果配回调用
 	IsError bool   `json:"isError,omitempty"`
 	Ts      string `json:"ts,omitempty"`
+	// Manual 只对 EvTitle 有意义：true 表示这是用户手工定的标题，
+	// 它应当压过 AI 自动生成的那个，也不该被后来的自动标题覆盖。
+	Manual bool `json:"manual,omitempty"`
 }
 
 // 内务记录：斜杠命令的展开、本地命令的回显。
@@ -39,8 +42,6 @@ type rawLine struct {
 	Type        string          `json:"type"`
 	Message     *rawMessage     `json:"message"`
 	Timestamp   string          `json:"timestamp"`
-	CustomTitle string          `json:"customTitle"`
-	Title       string          `json:"title"`
 	IsSidechain bool            `json:"isSidechain"`
 	Content     json.RawMessage `json:"content"`
 }
@@ -64,7 +65,17 @@ type rawBlock struct {
 }
 
 // parseLine 把一行 JSONL 翻译成零个或多个归一化事件。
-func parseLine(b []byte) []Event {
+//
+// **标题不在这里解析。** 标题字段名是 harness 的私有知识，交给 TitleSource
+// （见 harness.go）。这里曾经自己猜过一次字段名，猜错了而且没人发现——
+// 因为猜错的结果是「什么都不产出」，静默得毫无痕迹。
+func parseLine(b []byte, h Harness) []Event {
+	if ts, ok := h.(TitleSource); ok {
+		if title, manual := ts.TitleOf(b); title != "" {
+			return []Event{{Type: EvTitle, Text: title, Manual: manual}}
+		}
+	}
+
 	var r rawLine
 	if err := json.Unmarshal(b, &r); err != nil {
 		return nil // 半行/损坏，跳过
@@ -75,16 +86,6 @@ func parseLine(b []byte) []Event {
 	}
 
 	switch r.Type {
-	case "custom-title":
-		if r.CustomTitle != "" {
-			return []Event{{Type: EvTitle, Text: r.CustomTitle}}
-		}
-		return nil
-	case "ai-title":
-		if r.Title != "" {
-			return []Event{{Type: EvTitle, Text: r.Title}}
-		}
-		return nil
 	case "user", "assistant":
 	default:
 		return nil
@@ -162,7 +163,7 @@ func flattenResult(raw json.RawMessage) string {
 }
 
 // ReadTranscript 把整个文件读成事件序列。
-func ReadTranscript(path string) []Event {
+func ReadTranscript(path string, h Harness) []Event {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil
@@ -175,7 +176,7 @@ func ReadTranscript(path string) []Event {
 	// 默认 64KB 的上限会直接把这一行判成错误并中断扫描。
 	sc.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
 	for sc.Scan() {
-		out = append(out, parseLine(sc.Bytes())...)
+		out = append(out, parseLine(sc.Bytes(), h)...)
 	}
 	return out
 }
@@ -189,10 +190,11 @@ type Tailer struct {
 	offset int64
 	stop   chan struct{}
 	once   sync.Once
+	h      Harness // 解析归它管：记录格式是 harness 私有的
 }
 
-func NewTailer(path string, fromEnd bool) *Tailer {
-	t := &Tailer{path: path, stop: make(chan struct{})}
+func NewTailer(path string, fromEnd bool, h Harness) *Tailer {
+	t := &Tailer{path: path, stop: make(chan struct{}), h: h}
 	if fromEnd {
 		if st, err := os.Stat(path); err == nil {
 			t.offset = st.Size()
@@ -250,7 +252,7 @@ func (t *Tailer) readNew() []Event {
 			break
 		}
 		consumed += int64(len(line))
-		out = append(out, parseLine(line)...)
+		out = append(out, parseLine(line, t.h)...)
 	}
 	t.offset = consumed
 	return out

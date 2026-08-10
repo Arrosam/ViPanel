@@ -47,8 +47,7 @@
                     resize="none"
                     :placeholder="$t('aiTools.console.inputHint')"
                     @input="onInput"
-                    @keydown.enter.exact.prevent="send"
-                    @keydown.esc="closeAc"
+                    @keydown="onKey"
                 />
                 <div v-if="ac.open && ac.items.length" class="vp-ac">
                     <div
@@ -77,7 +76,7 @@
                 <el-select
                     v-if="caps.models?.length"
                     class="vp-sel"
-                    :model-value="''"
+                    v-model="picked.model"
                     size="small"
                     :placeholder="$t('aiTools.console.model')"
                     @change="(v) => emit('control', 'model', v)"
@@ -87,7 +86,7 @@
                 <el-select
                     v-if="caps.effortLevels?.length"
                     class="vp-sel"
-                    :model-value="''"
+                    v-model="picked.effort"
                     size="small"
                     placeholder="effort"
                     @change="(v) => emit('control', 'effort', v)"
@@ -112,6 +111,7 @@ import { MdPreview } from 'md-editor-v3';
 import 'md-editor-v3/lib/preview.css';
 
 const props = defineProps<{
+    sessionId: string;
     events: any[];
     busy: boolean;
     canInterrupt: boolean;
@@ -125,6 +125,26 @@ const emit = defineEmits<{
     (e: 'interrupt'): void;
     (e: 'control', kind: string, value: string): void;
 }>();
+
+// 模型与 effort 的当前显示值。
+//
+// 之前这两个下拉写死 :model-value=""，选完立刻弹回占位符——发出去了但界面上看不出来。
+//
+// 为什么这里用本地变量，而 mode 是从屏幕读的（见 harness_claude.go ReadMode）：
+// mode 在 TUI 底栏常驻（「⏸ manual mode on」），屏幕是可靠的事实源；
+// 而 model 和 effort **没有常驻显示**——实测只在会话开场的欢迎框
+// （「Opus 5 with low effort」）和切换时的确认行（「Set model to Sonnet 5」）里出现，
+// 对话几轮之后就滚没了。没有可读的事实源，就只能记住用户在这里选了什么。
+//
+// 已知局限：用户在右边终端里自己打 /model，这个下拉不会跟着变。
+const picked = ref<{ model: string; effort: string }>({ model: '', effort: '' });
+
+// 换会话时清空：上一个会话选的值不能带到下一个会话上显示。
+// 用 id 而不是 cwd 当信号——两个会话完全可能开在同一个目录下。
+watch(
+    () => props.sessionId,
+    () => (picked.value = { model: '', effort: '' }),
+);
 
 const attachments = ref<string[]>([]);
 const fileEl = ref<HTMLInputElement | null>(null);
@@ -231,6 +251,32 @@ watch(
         if (el) el.scrollTop = el.scrollHeight;
     },
 );
+
+// 键盘。Enter 和 Esc 合在一个处理器里。
+//
+// 分成 @keydown.enter 和 @keydown.esc 两个会编译成同名属性，
+// vue-tsc 报 TS1117「重复属性」——这个错在改动之前就存在。
+//
+// **输入法是这里的关键。** 中日韩输入法在候选词还没上屏时，回车的含义是
+// 「确认候选词」，而浏览器照样派发 keydown。Vue 的 .exact 只判修饰键、
+// 判不出组合态，于是一句没打完的话就被当成消息发走了。原来还带着 .prevent，
+// 那更糟——它无条件阻止默认行为，连「确认候选词」这个动作本身都被拦掉。
+//
+// 判据是 isComposing（组合期间为 true）。keyCode 229 是老浏览器的等价信号，
+// 一并认下，成本只有一个或。组合中**直接返回、不调用 preventDefault**，
+// 把这次回车原样交还给输入法。
+const onKey = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+        closeAc();
+        return;
+    }
+    if (e.key !== 'Enter') return;
+    // 等价于原来的 .exact：带任何修饰键都不发送（Shift+Enter 换行要留着）
+    if (e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) return;
+    if (e.isComposing || (e as any).keyCode === 229) return;
+    e.preventDefault();
+    send();
+};
 
 const send = () => {
     const t = draft.value.trim();

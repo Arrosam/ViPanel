@@ -90,6 +90,7 @@
                 <div class="vp-console__panes" :class="{ 'no-term': !showTerm }"
                      :style="showTerm ? { gridTemplateRows: `minmax(0,1fr) 4px ${termH}px` } : {}">
                     <Chat
+                        :session-id="currentSession?.id || ''"
                         :events="events"
                         :busy="currentSession?.status === 'working'"
                         :can-interrupt="!!currentSession?.capabilities.interrupt"

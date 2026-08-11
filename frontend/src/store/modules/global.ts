@@ -40,7 +40,6 @@ const GlobalStore = defineStore('GlobalState', {
         csrfToken: '',
         // auth
         ignoreCaptcha: true,
-        agreeLicense: false,
         isLogin: false,
         entrance: '',
         // context

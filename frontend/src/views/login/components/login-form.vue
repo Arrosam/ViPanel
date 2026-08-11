@@ -216,7 +216,6 @@ import { useGlobalStore } from '@/composables/useGlobalStore';
 const i18n = useI18n();
 const {
     globalStore,
-    agreeLicense,
     currentNode,
     ignoreCaptcha,
     isAdmin,
@@ -242,7 +241,6 @@ const passkeySupported = ref(false);
 const autoPasskeyEnabledKey = '1panel-passkey-auto-enabled';
 const showPasswordLogin = ref(false);
 const isDemo = ref(false);
-const open = ref(false);
 const loginBtnLinkColor = ref<string | null>(null);
 
 type FormInstance = InstanceType<typeof ElForm>;
@@ -259,19 +257,12 @@ const loginForm = reactive({
     captcha: '',
     captchaID: '',
     authMethod: 'session',
-    // ViPanel 不向用户索取《飞致云社区软件许可协议》的同意：我们不是飞致云的代理人，
-    // 让本分发版的用户去接受一个与本次分发无关的第三方的条款说不通。
-    // 这个字段只是本地 UI 闸门（不发送到任何地方），置真即等同于上游
-    // 给 intl / enterprise 构建走的那条「不问」路径。
-    // 注意：这不改变商标条款对**分发者**的约束，那是 GPLv3 §7(e) 允许保留的附加条款。
-    agreeLicense: true,
     language: 'zh',
 });
 
 const loginRules = reactive({
     name: [{ required: true, validator: checkUsername, trigger: 'blur' }],
     password: [{ required: true, validator: checkPassword, trigger: 'blur' }],
-    agreeLicense: [{ required: true, validator: checkAgreeLicense, trigger: 'blur' }],
 });
 
 function checkUsername(rule: any, value: any, callback: any) {
@@ -286,18 +277,11 @@ function checkPassword(rule: any, value: any, callback: any) {
     }
     callback();
 }
-function checkAgreeLicense(rule: any, value: any, callback: any) {
-    if (!value && !_isMobile()) {
-        return callback(new Error(i18n.t('commons.login.errorAgree')));
-    }
-    callback();
-}
 
 let isLoggingIn = false;
 const userNameRef = ref();
 const mfaLoginRef = ref();
 const mfaButtonFocused = ref();
-const pendingLoginMethod = ref<'password' | 'passkey'>('password');
 const mfaLoginForm = reactive({
     sessionId: '',
     secret: '',
@@ -354,16 +338,6 @@ const handleCommand = async (command: string) => {
     dropdownText.value = languageLabelMap[activeLocale] || languageLabelMap.zh;
 };
 
-const agreeWithLogin = () => {
-    open.value = false;
-    loginForm.agreeLicense = true;
-    if (pendingLoginMethod.value === 'passkey') {
-        passkeyLogin();
-        return;
-    }
-    login(loginFormRef.value);
-};
-
 const showPasskeyOnly = computed(() => {
     return passkeySetting.value && passkeySupported.value && !showPasswordLogin.value;
 });
@@ -381,16 +355,6 @@ const login = (formEl: FormInstance | undefined) => {
     errCaptcha.value = false;
     formEl.validate(async (valid) => {
         if (!valid) return;
-        if (isIntl.value || isFxplay.value || isEnterprise.value) {
-            loginForm.agreeLicense = true;
-        }
-        if (!loginForm.agreeLicense) {
-            if (_isMobile()) {
-                pendingLoginMethod.value = 'password';
-                open.value = true;
-            }
-            return;
-        }
         let requestLoginForm = {
             name: loginForm.name,
             password: encryptPassword(loginForm.password),
@@ -420,7 +384,6 @@ const login = (formEl: FormInstance | undefined) => {
                 return;
             }
             isLogin.value = true;
-            agreeLicense.value = true;
             menuStore.setMenuList([]);
             tabsStore.removeAllTabs();
             isAdmin.value = res.data.role === 'ADMIN';
@@ -508,15 +471,6 @@ const passkeyLogin = async () => {
         MsgError(i18n.t('commons.login.passkeyNotSupported'));
         return;
     }
-    if (!isIntl.value && !isEnterprise.value && !isFxplay.value && !loginForm.agreeLicense) {
-        if (_isMobile() || showPasskeyOnly.value) {
-            pendingLoginMethod.value = 'passkey';
-            open.value = true;
-        } else {
-            MsgError(i18n.t('commons.login.errorAgree'));
-        }
-        return;
-    }
     try {
         isLoggingIn = true;
         loading.value = true;
@@ -533,7 +487,6 @@ const passkeyLogin = async () => {
         enableAutoPasskey();
         ignoreCaptcha.value = true;
         isLogin.value = true;
-        agreeLicense.value = true;
         menuStore.setMenuList([]);
         tabsStore.removeAllTabs();
         isAdmin.value = loginRes.data.role === 'ADMIN';
@@ -616,9 +569,6 @@ const getSetting = async () => {
         menuAccordion.value = res.data.menuAccordion === 'Enable';
         themeConfig.value = { ...themeConfig.value, theme: res.data.theme, panelName: res.data.panelName };
 
-        if (res.data.passkeySetting && !isIntl.value && !isFxplay.value) {
-            loginForm.agreeLicense = true;
-        }
         if (passkeySetting.value && passkeySupported.value && isAutoPasskeyEnabled()) {
             passkeyLogin();
         }
@@ -656,7 +606,6 @@ onMounted(async () => {
     nextTick(() => {
         userNameRef.value?.focus();
     });
-    loginForm.agreeLicense = agreeLicense.value;
     document.onkeydown = (e: any) => {
         e = window.event || e;
         if (e.keyCode === 13) {

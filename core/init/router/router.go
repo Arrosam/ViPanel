@@ -30,7 +30,22 @@ var (
 
 func setWebStatic(rootRouter *gin.RouterGroup) {
 	rootRouter.StaticFS("/public", http.FS(web.Favicon))
-	rootRouter.StaticFS("/favicon.ico", http.FS(web.Favicon))
+	// /favicon.ico 必须直接返回图标本身。
+	//
+	// 上游这里用的是 StaticFS，等于把内嵌 FS 当成**目录**挂在这个路径上：
+	// 浏览器自动请求 /favicon.ico 时拿到的是一个 301，跟过去是一张列着
+	// favicon.png 的目录列表 HTML——不是图标。页面里的 <link> 指向
+	// /public/favicon.png 所以看不出来，但任何不读 link 的场景（书签、
+	// 部分浏览器的默认请求）都拿不到图标。
+	rootRouter.GET("/favicon.ico", func(c *gin.Context) {
+		data, err := web.Favicon.ReadFile("favicon.png")
+		if err != nil {
+			c.Status(http.StatusNotFound)
+			return
+		}
+		c.Header("Cache-Control", "public, max-age=86400")
+		c.Data(http.StatusOK, "image/png", data)
+	})
 	RegisterImages(rootRouter)
 	setStaticResource(rootRouter)
 	rootRouter.GET("/assets/*filepath", func(c *gin.Context) {

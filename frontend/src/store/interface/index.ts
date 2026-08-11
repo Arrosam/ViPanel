@@ -40,7 +40,6 @@ export interface GlobalState {
     loadingText: string;
     // auth
     ignoreCaptcha: boolean;
-    agreeLicense: boolean;
     isLogin: boolean;
     entrance: string;
     csrfToken: string;

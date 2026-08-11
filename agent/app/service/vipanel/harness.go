@@ -4,6 +4,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strconv"
+	"strings"
 )
 
 // Harness 是面板和具体 agent（Claude Code / 别的什么）之间**唯一**的接缝。
@@ -135,18 +138,62 @@ type InstallPlan struct {
 // Prereq 是一个前置依赖。
 type Prereq struct {
 	Binary string // 要检查在不在的命令名
-	Hint   string // 不在时告诉用户怎么办
+	// MinVersion 非空时**还要比版本**，格式 "22.0.0"。
+	//
+	// 只查命令在不在是不够的，这条是真机上撞出来的：Debian 12 自带 Node 18，
+	// 而 claude-code 的 engines 要求 >= 22。命令在、版本不够时，按钮照样出现，
+	// 用户点下去，npm 跑到一半以 EBADENGINE 失败——正是这套前置检查要防的事。
+	MinVersion string
+	Hint       string // 不满足时告诉用户怎么办
 }
 
-// MissingPrereqs 返回这个 harness 的安装前置里，本机缺少的那些。
+// MissingPrereqs 返回这个 harness 的安装前置里，本机不满足的那些。
 func MissingPrereqs(h Harness) []Prereq {
 	var out []Prereq
 	for _, r := range h.InstallPlan().Requires {
 		if _, err := exec.LookPath(r.Binary); err != nil {
 			out = append(out, r)
+			continue
+		}
+		if r.MinVersion != "" && !versionAtLeast(binaryVersion(r.Binary), r.MinVersion) {
+			out = append(out, r)
 		}
 	}
 	return out
+}
+
+// binaryVersion 跑 `<bin> --version` 并从输出里挑出第一串版本号。
+// 取不到返回空串——空串在 versionAtLeast 里一律判为不满足，
+// 因为「问不出版本」和「版本太低」对用户来说是同一件事：别让他点那个按钮。
+func binaryVersion(bin string) string {
+	out, err := exec.Command(bin, "--version").CombinedOutput()
+	if err != nil {
+		return ""
+	}
+	return versionRe.FindString(string(out))
+}
+
+var versionRe = regexp.MustCompile(`[0-9]+(\.[0-9]+)*`)
+
+// versionAtLeast 按段比较点分版本号，不引第三方 semver 库：
+// 这里只需要比 major.minor.patch，引一个依赖进 agent/go.mod 不划算
+// （那个文件是 rebase 冲突面）。
+func versionAtLeast(got, want string) bool {
+	if got == "" {
+		return false
+	}
+	g, w := strings.Split(got, "."), strings.Split(want, ".")
+	for i := 0; i < len(w); i++ {
+		var gv int
+		if i < len(g) {
+			gv, _ = strconv.Atoi(g[i])
+		}
+		wv, _ := strconv.Atoi(w[i])
+		if gv != wv {
+			return gv > wv
+		}
+	}
+	return true
 }
 
 // Installed 判断一个 harness 在这台机器上装没装。

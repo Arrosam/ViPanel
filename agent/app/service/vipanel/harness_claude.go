@@ -58,7 +58,13 @@ func (claudeCode) Binary() string { return "claude" }
 func (claudeCode) InstallPlan() InstallPlan {
 	return InstallPlan{
 		Installable: true,
-		Requires:    []Prereq{{Binary: "npm", Hint: nodeHint}},
+		// claude-code 的 engines 是 node >= 22，这是从 npm registry 上读的，
+		// 不是估的。少了这条版本要求，Debian 12 自带的 Node 18 会让按钮
+		// 出现而安装必然失败。
+		Requires: []Prereq{
+			{Binary: "node", MinVersion: "22.0.0", Hint: nodeHint},
+			{Binary: "npm", Hint: npmHint},
+		},
 		Spec: PtySpec{
 			File: "npm",
 			Args: []string{"install", "-g", "@anthropic-ai/claude-code"},
@@ -68,11 +74,17 @@ func (claudeCode) InstallPlan() InstallPlan {
 	}
 }
 
-// nodeHint 是三个 harness 共用的一句人话。
+// 两条给人看的提示。
 //
 // 面板**不替用户装 Node**：那是往系统里塞一整套运行时，还会和用户自己的
-// nvm / 发行版包管理器打架。给一条能照着敲的命令，比替他做决定合适。
-const nodeHint = "需要先装 Node.js（Debian/Ubuntu: apt install -y nodejs npm；或用 nvm 装更新的版本）"
+// nvm / 发行版包管理器打架。说清要什么版本、去哪拿，比替他做决定合适。
+//
+// 特别不要写成 "apt install nodejs"——Debian 12 给的是 18，装完 claude-code
+// 仍然跑不起来，那种提示比没有提示更糟。
+const (
+	nodeHint = "需要 Node.js ≥ 22。Debian 12 源里是 18，不够——从 nodejs.org 下官方 LTS 二进制解压到 /usr/local，或用 nvm 装"
+	npmHint  = "npm 随 Node.js 一起安装，装好 Node 就有了"
+)
 
 // Spawn：首次用 --session-id 指定 id，之后用 --resume 接回。
 //

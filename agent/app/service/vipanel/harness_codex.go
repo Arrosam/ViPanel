@@ -92,7 +92,13 @@ func (codexCLI) Binary() string { return "codex" }
 func (codexCLI) InstallPlan() InstallPlan {
 	return InstallPlan{
 		Installable: true,
-		Requires:    []Prereq{{Binary: "npm", Hint: nodeHint}},
+		// codex 的 engines 只要求 node >= 16，比 claude 宽松。
+		// 这里如实写它自己的要求，不跟着 claude 抄——两个 harness 的
+		// 前置条件本来就该各说各的。
+		Requires: []Prereq{
+			{Binary: "node", MinVersion: "16.0.0", Hint: nodeHint},
+			{Binary: "npm", Hint: npmHint},
+		},
 		Spec: PtySpec{
 			File: "npm",
 			Args: []string{"install", "-g", "@openai/codex"},

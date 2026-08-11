@@ -1,6 +1,7 @@
 package vipanel
 
 import (
+	"os/exec"
 	"strings"
 	"testing"
 )
@@ -77,5 +78,45 @@ func TestInstallSpecRefusesWhenNotInstallable(t *testing.T) {
 	}
 	if _, err := InstallSpec("根本不存在的-harness"); err == nil {
 		t.Error("未知 harness 应当报错")
+	}
+}
+
+// 版本比较：段数不齐、前缀带 v、取不到版本，这几种都要判对。
+// 判错的后果是静默的——按钮出现，安装以 EBADENGINE 失败。
+func TestVersionAtLeast(t *testing.T) {
+	cases := []struct {
+		got, want string
+		ok        bool
+	}{
+		{"24.19.0", "22.0.0", true},
+		{"22.0.0", "22.0.0", true},
+		{"18.20.4", "22.0.0", false}, // Debian 12 自带的那个
+		{"22", "22.0.0", true},       // 段数不齐，缺的位当 0
+		{"21.9.9", "22.0.0", false},
+		{"", "22.0.0", false}, // 问不出版本一律当不满足
+		{"16.0.0", "16.0.0", true},
+	}
+	for _, c := range cases {
+		if got := versionAtLeast(c.got, c.want); got != c.ok {
+			t.Errorf("versionAtLeast(%q, %q) = %v，要的是 %v", c.got, c.want, got, c.ok)
+		}
+	}
+}
+
+// 声明了 MinVersion 的前置，必须是真的能问出版本的命令。
+// 写一个不支持 --version 的命令名，检查会恒判不满足，按钮永远不出现。
+func TestMinVersionPrereqsAreQueryable(t *testing.T) {
+	for _, h := range List() {
+		for _, r := range h.InstallPlan().Requires {
+			if r.MinVersion == "" {
+				continue
+			}
+			if _, err := exec.LookPath(r.Binary); err != nil {
+				t.Skipf("本机没有 %s，跳过", r.Binary)
+			}
+			if v := binaryVersion(r.Binary); v == "" {
+				t.Errorf("%s: 前置 %s 声明了 MinVersion 但问不出版本", h.ID(), r.Binary)
+			}
+		}
 	}
 }

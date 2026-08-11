@@ -118,13 +118,23 @@ const panelName = computed(() => themeConfig.value?.panelName || 'ViPanel');
     opacity: 0.78;
 }
 
+// 圆点必须是**弹性项**，不能是内联元素。
+// 内联的话换行后第二行会顶到最左边，跟圆点对齐而不是跟文字对齐——
+// 中文要点一旦超过一行就看得出来（"不是一段 / JSON" 那条）。
+.vp-brand__points li {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+}
+
 .vp-brand__points li::before {
     content: '';
-    display: inline-block;
+    flex: none;
     width: 5px;
     height: 5px;
-    margin-right: 10px;
-    vertical-align: 2px;
+    // 空的弹性项以下外边距缘作基线，所以 margin-bottom 就是「抬高多少」，
+    // 等价于原来那个 vertical-align: 2px。
+    margin-bottom: 2px;
     border-radius: 50%;
     background: currentColor;
     opacity: 0.7;

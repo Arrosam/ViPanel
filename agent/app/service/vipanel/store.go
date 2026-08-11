@@ -2,6 +2,7 @@ package vipanel
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -199,6 +200,28 @@ func OpenHistory(id, cwd, title string) (*Session, error) {
 // ---------------------------------------------------------------------------
 // harness 自己的登录
 // ---------------------------------------------------------------------------
+
+// InstallSpec 返回安装某个 harness 的命令，同时把「不该装」的情况挡在这里。
+//
+// 挡在服务端而不是只靠界面隐藏按钮：界面是可以绕过的，而这条路的终点是
+// 在这台机器上以 root 跑一条命令。
+func InstallSpec(harnessID string) (PtySpec, error) {
+	h := Get(harnessID)
+	if h.ID() != harnessID {
+		return PtySpec{}, fmt.Errorf("没有这个 harness: %s", harnessID)
+	}
+	plan := h.InstallPlan()
+	if !plan.Installable {
+		return PtySpec{}, fmt.Errorf("%s 不支持从面板安装：%s", h.DisplayName(), plan.Note)
+	}
+	if Installed(h) {
+		return PtySpec{}, fmt.Errorf("%s 已经装好了", h.DisplayName())
+	}
+	if miss := MissingPrereqs(h); len(miss) > 0 {
+		return PtySpec{}, fmt.Errorf("缺少 %s：%s", miss[0].Binary, miss[0].Hint)
+	}
+	return plan.Spec, nil
+}
 
 func AuthStatus(harnessID string) AuthState {
 	a, ok := Get(harnessID).(Authenticator)

@@ -30,8 +30,23 @@ type ViHarnessItem struct {
 	ID          string `json:"id"`
 	DisplayName string `json:"displayName"`
 	// Installed 为 false 时界面必须把它标成不可用，而不是让用户点进去撞墙。
-	Installed bool   `json:"installed"`
-	Caps      ViCaps `json:"capabilities"`
+	Installed bool          `json:"installed"`
+	Install   ViInstallInfo `json:"install"`
+	Caps      ViCaps        `json:"capabilities"`
+}
+
+// ViInstallInfo 告诉界面「这个 harness 能不能装、装之前还缺什么」。
+type ViInstallInfo struct {
+	Installable bool `json:"installable"`
+	// Missing 是本机缺少的前置依赖。非空时界面显示原因而不是安装按钮——
+	// 让用户点一个注定失败的按钮不如直接告诉他缺什么。
+	Missing []ViPrereq `json:"missing,omitempty"`
+	Note    string     `json:"note,omitempty"`
+}
+
+type ViPrereq struct {
+	Binary string `json:"binary"`
+	Hint   string `json:"hint"`
 }
 
 type ViSessionCreate struct {

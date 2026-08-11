@@ -27,11 +27,24 @@ export namespace ViPanel {
         capabilities: Caps;
     }
 
+    export interface Prereq {
+        binary: string;
+        hint: string;
+    }
+
+    export interface InstallInfo {
+        installable: boolean;
+        // 本机缺少的前置依赖。非空时显示原因，不显示安装按钮。
+        missing?: Prereq[];
+        note?: string;
+    }
+
     export interface Harness {
         id: string;
         displayName: string;
         // 这台机器上装没装。没装就别让用户点进去撞墙。
         installed: boolean;
+        install: InstallInfo;
         capabilities: Caps;
     }
 

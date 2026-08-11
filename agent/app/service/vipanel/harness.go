@@ -27,6 +27,14 @@ type Harness interface {
 	// 去跑一遍那些副作用是错的。
 	Binary() string
 
+	// InstallPlan 返回把这个 harness 装到本机所需的一切。
+	//
+	// **进主接口而不是做成可选接口**，是因为「怎么装」这个问题对每个 harness
+	// 都有答案——包括「装不了」和「不用装」。可选接口的语义是「这个概念对我
+	// 不适用」，而安装不属于这一类：shell 的答案是「系统自带」，那是一个
+	// 真实的回答，不是缺席。放进主接口，加新 harness 时编译器会逼着回答它。
+	InstallPlan() InstallPlan
+
 	// Spawn 返回启动这个 agent 所需的命令。resume 为真时要接回原有对话。
 	Spawn(ctx SpawnContext) PtySpec
 
@@ -106,6 +114,39 @@ func Get(id string) Harness {
 		return h
 	}
 	return registry[DefaultHarness]
+}
+
+// InstallPlan 是把一个 harness 装上所需的一切。
+type InstallPlan struct {
+	// Installable 为 false 时面板不显示安装按钮。
+	// shell 就是这种：它是系统自带的，没有「安装」这个动作。
+	Installable bool
+	// Requires 是前置依赖。**面板先查这些命令在不在，缺了直接说清楚**，
+	// 而不是把安装脚本跑起来、让用户对着 "npm: command not found" 发愣。
+	Requires []Prereq
+	// Spec 是安装命令本身。走伪终端，输出实时推到浏览器——
+	// npm 装东西要几十秒，没有实时输出的进度条只会让人以为卡死了。
+	Spec PtySpec
+	// Note 是给人看的一句话：装的是什么、从哪来。
+	// 安装是往这台机器上放可执行文件，用户有权在点之前知道装的是什么。
+	Note string
+}
+
+// Prereq 是一个前置依赖。
+type Prereq struct {
+	Binary string // 要检查在不在的命令名
+	Hint   string // 不在时告诉用户怎么办
+}
+
+// MissingPrereqs 返回这个 harness 的安装前置里，本机缺少的那些。
+func MissingPrereqs(h Harness) []Prereq {
+	var out []Prereq
+	for _, r := range h.InstallPlan().Requires {
+		if _, err := exec.LookPath(r.Binary); err != nil {
+			out = append(out, r)
+		}
+	}
+	return out
 }
 
 // Installed 判断一个 harness 在这台机器上装没装。

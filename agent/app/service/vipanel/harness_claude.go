@@ -53,6 +53,27 @@ func (claudeCode) Capabilities() Capabilities {
 
 func (claudeCode) Binary() string { return "claude" }
 
+// InstallPlan：官方发布在 npm 上，包名 @anthropic-ai/claude-code，bin 名 claude。
+// 这两个都是从 registry 上核对过的，不是照着印象写的。
+func (claudeCode) InstallPlan() InstallPlan {
+	return InstallPlan{
+		Installable: true,
+		Requires:    []Prereq{{Binary: "npm", Hint: nodeHint}},
+		Spec: PtySpec{
+			File: "npm",
+			Args: []string{"install", "-g", "@anthropic-ai/claude-code"},
+			Cols: agentCols, Rows: agentRows,
+		},
+		Note: "从 npm 全局安装 @anthropic-ai/claude-code",
+	}
+}
+
+// nodeHint 是三个 harness 共用的一句人话。
+//
+// 面板**不替用户装 Node**：那是往系统里塞一整套运行时，还会和用户自己的
+// nvm / 发行版包管理器打架。给一条能照着敲的命令，比替他做决定合适。
+const nodeHint = "需要先装 Node.js（Debian/Ubuntu: apt install -y nodejs npm；或用 nvm 装更新的版本）"
+
 // Spawn：首次用 --session-id 指定 id，之后用 --resume 接回。
 //
 // --resume 不带 --fork-session 时**复用**原 session id，transcript 还是同一个
@@ -180,6 +201,14 @@ func (shellHarness) Capabilities() Capabilities { return Capabilities{} }
 // Binary 是用户自己的登录 shell。这台机器上一定有——它是 shellHarness
 // 存在的前提，也是「全 false 的能力表也能跑」这个证伪件的最后一格。
 func (shellHarness) Binary() string { return LoginShell() }
+
+// InstallPlan：装不了，因为不用装。
+//
+// 这不是「空实现」——它是这个问题在 shell 上的**真实答案**。
+// 登录 shell 是系统自带的，面板显示一个「安装」按钮才是错的。
+func (shellHarness) InstallPlan() InstallPlan {
+	return InstallPlan{Installable: false, Note: "系统自带，无需安装"}
+}
 
 func (shellHarness) Spawn(ctx SpawnContext) PtySpec {
 	return PtySpec{File: LoginShell(), Cwd: ctx.Cwd, Env: ctx.Env, Cols: ctx.Cols, Rows: ctx.Rows}

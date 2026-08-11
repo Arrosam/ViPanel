@@ -395,6 +395,45 @@ func (b *BaseApi) WsViAuthLogin(c *gin.Context) {
 }
 
 // @Tags ViPanel
+// @Summary 安装 harness（WebSocket，实时输出）
+// @Param harness query string true "harness id"
+// @Router /ai/console/harness/install [get]
+func (b *BaseApi) WsViHarnessInstall(c *gin.Context) {
+	if !websocket.IsWebSocketUpgrade(c.Request) {
+		helper.Success(c)
+		return
+	}
+	conn, err := upGrader.Upgrade(c.Writer, c.Request, nil)
+	if err != nil {
+		global.LOG.Errorf("vipanel: websocket 升级失败, err: %v", err)
+		return
+	}
+	defer conn.Close()
+
+	id := c.Query("harness")
+	spec, err := vipanel.InstallSpec(id)
+	if wshandleError(conn, err) {
+		return
+	}
+	global.LOG.Infof("vipanel: 开始安装 harness %s: %s %v", id, spec.File, spec.Args)
+
+	pty, err := vipanel.StartPty(spec)
+	if wshandleError(conn, errors.WithMessage(err, "安装进程启动失败")) {
+		return
+	}
+	defer pty.Close()
+
+	bridge := vipanel.NewPtyBridge(conn, pty)
+	bridge.Run()
+
+	// 结果**以实际探测为准**，不看退出码：npm 可能 0 退出但没把 bin 放进 PATH
+	// （权限、prefix 配错都会这样）。装没装成，问 LookPath 才算数。
+	ok := vipanel.Installed(vipanel.Get(id))
+	global.LOG.Infof("vipanel: harness %s 安装结束，installed=%v", id, ok)
+	_ = bridge.Send(gin.H{"type": "install_done", "installed": ok})
+}
+
+// @Tags ViPanel
 // @Summary 镜像会话的 agent 屏幕
 // @Param id query string true "会话 id"
 // @Router /ai/console/agent [get]

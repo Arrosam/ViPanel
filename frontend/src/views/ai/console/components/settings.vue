@@ -24,6 +24,20 @@
                     </span>
                     <template v-if="!h.installed">
                         <span class="vp-set__bad">{{ $t('aiTools.console.notInstalled') }}</span>
+                        <!-- 缺前置依赖时显示缺什么，而不是给一个注定失败的按钮 -->
+                        <span v-if="h.install.missing?.length" class="vp-set__note">
+                            {{ h.install.missing[0].hint }}
+                        </span>
+                        <el-button
+                            v-else-if="h.install.installable"
+                            link
+                            type="primary"
+                            size="small"
+                            @click="installRef?.open(h.id, h.displayName, h.install.note)"
+                        >
+                            {{ $t('aiTools.console.install') }}
+                        </el-button>
+                        <span v-else class="vp-set__note">{{ h.install.note }}</span>
                     </template>
                     <template v-else-if="h.capabilities.auth">
                         <span v-if="auth[h.id]?.loggedIn" class="vp-set__ok">
@@ -52,10 +66,13 @@
             <el-button type="primary" @click="save">{{ $t('aiTools.console.save') }}</el-button>
         </template>
     </el-dialog>
+
+    <AgentInstall ref="installRef" @done="onInstalled" />
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue';
+import AgentInstall from './agent-install.vue';
 import {
     getPool,
     updatePool,
@@ -79,6 +96,17 @@ const harnesses = ref<ViPanel.Harness[]>([]);
 // 登录状态**每个 harness 各一份**：Claude 登录了不代表 Codex 登录了。
 const auth = ref<Record<string, ViPanel.AuthState>>({});
 const mcp = ref({ enabled: true, installed: false, opCount: 0 });
+const installRef = ref();
+
+// 装完之后必须重新拉一次列表：installed / 登录状态都变了，
+// 界面继续显示「未安装」就是在撒谎。
+const onInstalled = async (installed: boolean) => {
+    await load();
+    if (installed) {
+        MsgSuccess(t('aiTools.console.installOk'));
+        emit('changed');
+    }
+};
 
 const load = async () => {
     const [p, hs, m] = await Promise.all([getPool(), listHarnesses(), getMcpSetting()]);

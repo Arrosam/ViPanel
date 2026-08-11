@@ -86,6 +86,22 @@ func (codexCLI) Capabilities() Capabilities {
 
 func (codexCLI) Binary() string { return "codex" }
 
+// InstallPlan：npm 上的 @openai/codex，bin 名 codex。
+// 版本号能对上——registry 上的 latest 和实测机器上 `codex --version`
+// 报的 codex-cli 0.147.0 是同一个。
+func (codexCLI) InstallPlan() InstallPlan {
+	return InstallPlan{
+		Installable: true,
+		Requires:    []Prereq{{Binary: "npm", Hint: nodeHint}},
+		Spec: PtySpec{
+			File: "npm",
+			Args: []string{"install", "-g", "@openai/codex"},
+			Cols: agentCols, Rows: agentRows,
+		},
+		Note: "从 npm 全局安装 @openai/codex",
+	}
+}
+
 // Spawn 起一个交互式 Codex。
 //
 // 配置**全部走 -c 命令行覆盖，一个字节都不写进用户的 ~/.codex/config.toml**。

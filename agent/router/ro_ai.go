@@ -25,6 +25,7 @@ func (a *AIToolsRouter) InitRouter(Router *gin.RouterGroup) {
 		aiToolsRouter.POST("/console/sessions/restart", baseApi.RestartViSession)
 		aiToolsRouter.POST("/console/sessions/control", baseApi.ControlViSession)
 		aiToolsRouter.GET("/console/harnesses", baseApi.ListViHarnesses)
+		aiToolsRouter.GET("/console/harness/install", baseApi.WsViHarnessInstall)
 		aiToolsRouter.GET("/console/pool", baseApi.GetViPool)
 		aiToolsRouter.POST("/console/pool/update", baseApi.UpdateViPool)
 		aiToolsRouter.GET("/console/history", baseApi.ListViHistory)

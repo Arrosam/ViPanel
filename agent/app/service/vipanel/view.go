@@ -69,9 +69,18 @@ func Harnesses() []dto.ViHarnessItem {
 	hs := List()
 	out := make([]dto.ViHarnessItem, 0, len(hs))
 	for _, h := range hs {
+		plan := h.InstallPlan()
+		info := dto.ViInstallInfo{Installable: plan.Installable, Note: plan.Note}
+		// 只在「装不了」的时候才去查前置依赖：已经装好的 harness
+		// 报缺 npm 是纯噪音，而且每次都要跑几次 LookPath。
+		if plan.Installable && !Installed(h) {
+			for _, r := range MissingPrereqs(h) {
+				info.Missing = append(info.Missing, dto.ViPrereq{Binary: r.Binary, Hint: r.Hint})
+			}
+		}
 		out = append(out, dto.ViHarnessItem{
 			ID: h.ID(), DisplayName: h.DisplayName(),
-			Installed: Installed(h), Caps: toCaps(h.Capabilities()),
+			Installed: Installed(h), Install: info, Caps: toCaps(h.Capabilities()),
 		})
 	}
 	return out

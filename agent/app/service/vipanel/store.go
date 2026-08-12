@@ -220,7 +220,8 @@ func InstallSpec(harnessID string) (PtySpec, error) {
 	if miss := MissingPrereqs(h); len(miss) > 0 {
 		return PtySpec{}, fmt.Errorf("缺少 %s：%s", miss[0].Binary, miss[0].Hint)
 	}
-	return plan.Spec, nil
+	// 安装只加代理：中转那几个参数是给 agent 的，塞给 npm 会让它报错。
+	return withProxyOnly(plan.Spec), nil
 }
 
 func AuthStatus(harnessID string) AuthState {
@@ -248,7 +249,7 @@ func LoginSpec(harnessID, mode string) (PtySpec, error) {
 	if !ok {
 		return PtySpec{}, errors.New("当前 harness 没有登录体系")
 	}
-	return a.LoginSpec(mode), nil
+	return withOutbound(harnessID, a.LoginSpec(mode)), nil
 }
 
 // urlPattern 只认 http(s)，并且在任何控制字符处断开。

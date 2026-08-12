@@ -357,7 +357,7 @@ func peek(path string) *Discovered {
 // -- Claude 自己的登录 -------------------------------------------------------
 
 func (claudeCode) AuthStatus() AuthState {
-	out, err := exec.Command("claude", "auth", "status", "--json").Output()
+	out, err := outboundCmd("claude-code", "claude", "auth", "status", "--json").Output()
 	if err != nil {
 		return AuthState{Supported: true}
 	}
@@ -397,8 +397,32 @@ func (claudeCode) LoginSpec(mode string) PtySpec {
 }
 
 func (claudeCode) Logout() error {
-	return exec.Command("claude", "auth", "logout").Run()
+	return outboundCmd("claude-code", "claude", "auth", "logout").Run()
 }
+
+// -- 出站 ---------------------------------------------------------------------
+
+// Endpoints：claude 要连的就是 API 那一个地址。
+// 登录走的也是同一套域名体系，所以探它一个就够，不必把用户等在五个探测上。
+func (claudeCode) Endpoints() []Endpoint {
+	return []Endpoint{{URL: "https://api.anthropic.com/v1/models", Purpose: "Anthropic API"}}
+}
+
+// ProviderEnv：claude 认环境变量。这几个名字是从它的二进制里查出来的
+// （ANTHROPIC_BASE_URL 49 处、ANTHROPIC_AUTH_TOKEN 50 处），不是照文档抄的。
+//
+// 用 AUTH_TOKEN 而不是 API_KEY：中转端点通常发的是 Bearer 令牌，
+// 而 ANTHROPIC_API_KEY 会走 x-api-key 头。两个都设会让行为取决于
+// 它内部的优先级，那是我们控制不了的一层。
+func (claudeCode) ProviderEnv(p Provider) []string {
+	return []string{
+		"ANTHROPIC_BASE_URL=" + strings.TrimSpace(p.BaseURL),
+		"ANTHROPIC_AUTH_TOKEN=" + strings.TrimSpace(p.APIKey),
+	}
+}
+
+// ProviderArgs：claude 不需要命令行参数，环境变量就够。
+func (claudeCode) ProviderArgs(Provider) []string { return nil }
 
 // -- 账号 ---------------------------------------------------------------------
 

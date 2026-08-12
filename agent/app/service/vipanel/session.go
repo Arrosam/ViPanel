@@ -145,13 +145,14 @@ func (s *Session) start() error {
 	// 新建会话还没说话就切走再切回来，一定会撞上这条路径。
 	resume := s.Harness.Capabilities().Resume && s.Harness.HasHistory(s.ID, s.Cwd)
 
-	spec := s.Harness.Spawn(SpawnContext{
+	// 出站配置（代理 / 中转端点）必须在这里注入，否则会话根本连不上模型。
+	spec := withOutbound(s.Harness.ID(), s.Harness.Spawn(SpawnContext{
 		SessionID: s.ID,
 		Cwd:       s.Cwd,
 		Resume:    resume,
 		Cols:      agentCols,
 		Rows:      agentRows,
-	})
+	}))
 	p, err := StartPty(spec)
 	if err != nil {
 		return err
@@ -187,9 +188,9 @@ func (s *Session) watchResumeFailure(p *Pty) {
 	s.mu.Unlock()
 
 	global.LOG.Infof("vipanel: 会话 %s resume 失败，退回新建", s.ID)
-	spec := s.Harness.Spawn(SpawnContext{
+	spec := withOutbound(s.Harness.ID(), s.Harness.Spawn(SpawnContext{
 		SessionID: s.ID, Cwd: s.Cwd, Resume: false, Cols: agentCols, Rows: agentRows,
-	})
+	}))
 	if np, err := StartPty(spec); err == nil {
 		s.mu.Lock()
 		s.pty = np

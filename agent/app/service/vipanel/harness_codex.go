@@ -3,7 +3,6 @@ package vipanel
 import (
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -198,11 +197,48 @@ func (codexCLI) HasHistory(string, string) bool { return false }
 // 在「放行」和「拒绝」之间，没有沙箱兜底的机器上只能选拒绝。
 func (codexCLI) TimeoutDecision() Decision { return DecideDeny }
 
+// -- 出站 ---------------------------------------------------------------------
+
+// Endpoints：codex 要连两处，而且**两处会分别失败**。
+//   - auth.openai.com：设备码登录的第一步，连不上就根本登不进去
+//   - api.openai.com：会话本身
+//
+// 分开探是因为只探一个会给出误导性的结论。
+func (codexCLI) Endpoints() []Endpoint {
+	return []Endpoint{
+		{URL: "https://auth.openai.com/", Purpose: "登录（设备码授权）"},
+		{URL: "https://api.openai.com/v1/models", Purpose: "OpenAI API"},
+	}
+}
+
+// ProviderEnv：只给密钥。
+//
+// **codex 不认 OPENAI_BASE_URL**——在它的二进制里 0 命中，而
+// model_providers / base_url / env_key / wire_api 都在。所以地址不能靠
+// 环境变量传，只能走配置；这里只负责把密钥放进 env_key 指名的那个变量。
+func (codexCLI) ProviderEnv(p Provider) []string {
+	return []string{"OPENAI_API_KEY=" + strings.TrimSpace(p.APIKey)}
+}
+
+// ProviderArgs：地址走 -c 内联 TOML，和钩子、MCP 同一条路——
+// 不往用户的 config.toml 里写一个字节。
+//
+// wire_api 用 "chat"：中转端点绝大多数实现的是 OpenAI 的 chat completions，
+// 而 responses 那套只有官方稳定支持。猜错的表现是每次请求 404。
+func (codexCLI) ProviderArgs(p Provider) []string {
+	base, _ := json.Marshal(strings.TrimSpace(p.BaseURL))
+	return []string{
+		"-c", `model_provider="vipanel"`,
+		"-c", `model_providers.vipanel={name="ViPanel 中转", base_url=` + string(base) +
+			`, env_key="OPENAI_API_KEY", wire_api="chat"}`,
+	}
+}
+
 // -- 登录 ---------------------------------------------------------------------
 
 func (c codexCLI) AuthStatus() AuthState {
 	st := AuthState{Supported: true, HookInstalled: HookInstalled()}
-	out, err := exec.Command("codex", "login", "status").CombinedOutput()
+	out, err := outboundCmd("codex", "codex", "login", "status").CombinedOutput()
 	if err != nil {
 		// 未登录时退出码就是 1，这不是"命令坏了"。实测输出是 "Not logged in"。
 		return st
@@ -308,7 +344,7 @@ func (codexCLI) LoginCode(chunk []byte) string {
 var codexCodeRe = regexp.MustCompile(`\b[A-Z0-9]{4}-[A-Z0-9]{4,6}\b`)
 
 func (codexCLI) Logout() error {
-	return exec.Command("codex", "logout").Run()
+	return outboundCmd("codex", "codex", "logout").Run()
 }
 
 // -- 运行中调整 ---------------------------------------------------------------

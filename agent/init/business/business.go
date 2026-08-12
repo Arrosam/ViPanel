@@ -15,6 +15,7 @@ func Init() {
 	// 起不起由实例池按 LRU 决定。放在同步执行，界面第一次拉列表就得能看到。
 	vipanel.LoadPoolSize()
 	vipanel.LoadMCPEnabled()
+	vipanel.LoadOutbound()
 	vipanel.Restore()
 
 	go syncApp()

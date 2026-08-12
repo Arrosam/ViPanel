@@ -83,3 +83,17 @@ type ViAccountRef struct {
 	Harness string `json:"harness" validate:"required"`
 	ID      string `json:"id" validate:"required"`
 }
+
+type ViProxy struct {
+	URL string `json:"url"`
+}
+
+type ViProviderReq struct {
+	Harness string `json:"harness" validate:"required"`
+	BaseURL string `json:"baseUrl"`
+	APIKey  string `json:"apiKey"`
+}
+
+type ViHarnessRef struct {
+	Harness string `json:"harness" validate:"required"`
+}

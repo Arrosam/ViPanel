@@ -403,6 +403,55 @@ func (b *BaseApi) WsViAuthLogin(c *gin.Context) {
 }
 
 // @Tags ViPanel
+// @Summary 出站设置（代理 + 各 harness 的中转端点）
+// @Router /ai/console/outbound [get]
+func (b *BaseApi) GetViOutbound(c *gin.Context) {
+	helper.SuccessWithData(c, vipanel.OutboundSetting())
+}
+
+// @Tags ViPanel
+// @Summary 保存出站代理
+// @Router /ai/console/outbound/proxy [post]
+func (b *BaseApi) UpdateViProxy(c *gin.Context) {
+	var req dto.ViProxy
+	if err := helper.CheckBindAndValidate(&req, c); err != nil {
+		return
+	}
+	if err := vipanel.SetProxy(vipanel.Proxy{URL: req.URL}); err != nil {
+		helper.BadRequest(c, err)
+		return
+	}
+	helper.SuccessWithData(c, vipanel.OutboundSetting())
+}
+
+// @Tags ViPanel
+// @Summary 保存某个 harness 的中转端点
+// @Router /ai/console/outbound/provider [post]
+func (b *BaseApi) UpdateViProvider(c *gin.Context) {
+	var req dto.ViProviderReq
+	if err := helper.CheckBindAndValidate(&req, c); err != nil {
+		return
+	}
+	p := vipanel.Provider{BaseURL: req.BaseURL, APIKey: req.APIKey}
+	if err := vipanel.SetProvider(req.Harness, p); err != nil {
+		helper.BadRequest(c, err)
+		return
+	}
+	helper.SuccessWithData(c, vipanel.OutboundSetting())
+}
+
+// @Tags ViPanel
+// @Summary 探测某个 harness 依赖端点的可达性
+// @Router /ai/console/outbound/check [post]
+func (b *BaseApi) CheckViReachability(c *gin.Context) {
+	var req dto.ViHarnessRef
+	if err := helper.CheckBindAndValidate(&req, c); err != nil {
+		return
+	}
+	helper.SuccessWithData(c, vipanel.CheckReachability(req.Harness, vipanel.CurrentProxy()))
+}
+
+// @Tags ViPanel
 // @Summary 列出某个 harness 的已保存账号
 // @Router /ai/console/accounts [get]
 func (b *BaseApi) ListViAccounts(c *gin.Context) {

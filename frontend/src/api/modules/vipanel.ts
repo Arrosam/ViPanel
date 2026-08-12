@@ -46,3 +46,18 @@ export const controlSession = (id: string, kind: string, value: string) =>
 export const getMcpSetting = () => http.get<any>('/ai/console/mcp/setting');
 export const updateMcpSetting = (enabled: boolean) =>
     http.post<any>('/ai/console/mcp/setting/update', { enabled });
+
+// -- 账号管理 -----------------------------------------------------------------
+//
+// 账号是**每个 harness 各一套**的：Claude 的账号和 Codex 的账号毫无关系。
+export const listAccounts = (harness: string) =>
+    http.get<ViPanel.Account[]>(`/ai/console/accounts?harness=${harness}`);
+
+export const captureAccount = (harness: string, label?: string) =>
+    http.post<ViPanel.Account>(`/ai/console/accounts/capture`, { harness, label: label || '' });
+
+export const activateAccount = (harness: string, id: string) =>
+    http.post<{ needRestart: boolean }>(`/ai/console/accounts/activate`, { harness, id });
+
+export const deleteAccount = (harness: string, id: string) =>
+    http.post(`/ai/console/accounts/delete`, { harness, id });

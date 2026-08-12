@@ -73,3 +73,13 @@ type ViPoolInfo struct {
 type ViPoolSize struct {
 	Size int `json:"size" validate:"required,min=1,max=16"`
 }
+
+type ViAccountCapture struct {
+	Harness string `json:"harness" validate:"required"`
+	Label   string `json:"label"`
+}
+
+type ViAccountRef struct {
+	Harness string `json:"harness" validate:"required"`
+	ID      string `json:"id" validate:"required"`
+}

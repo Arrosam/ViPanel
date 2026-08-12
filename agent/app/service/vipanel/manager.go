@@ -193,3 +193,18 @@ func pickVictim(alive, taken []*Session, except *Session) *Session {
 	}
 	return nil
 }
+
+// AliveCount 数一数某个 harness 下还活着的会话。
+//
+// 用途只有一个：切换账号后告诉界面「要不要提示重启会话」。
+// agent 进程在启动时就把凭据读进内存了，切换只改磁盘——
+// 不提示的话，用户会以为切了，而正在跑的会话仍然用着旧账号。
+func (m *Manager) AliveCount(harnessID string) int {
+	n := 0
+	for _, s := range m.All() {
+		if s.Alive() && (harnessID == "" || s.Harness.ID() == harnessID) {
+			n++
+		}
+	}
+	return n
+}

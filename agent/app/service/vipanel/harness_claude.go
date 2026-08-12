@@ -400,6 +400,51 @@ func (claudeCode) Logout() error {
 	return exec.Command("claude", "auth", "logout").Run()
 }
 
+// -- 账号 ---------------------------------------------------------------------
+
+// AccountArtifacts：claude 的登录态分散在两处，都是真机上核对过的。
+//
+//	~/.claude/.credentials.json  整个文件就是凭据
+//	  {"claudeAiOauth":{accessToken,refreshToken,expiresAt,scopes,subscriptionType,…}}
+//
+//	~/.claude.json               **只能取这两个键**
+//	  oauthAccount（emailAddress / organizationName / accountUuid …）和 userID。
+//	  这个文件里还塞着历史、项目列表、各种计数——整文件搬运会把它们一起换掉，
+//	  切个账号顺带换掉历史记录，那是数据损坏不是功能。
+func (claudeCode) AccountArtifacts() []AccountArtifact {
+	home, _ := os.UserHomeDir()
+	return []AccountArtifact{
+		{Path: filepath.Join(home, ".claude", ".credentials.json")},
+		{Path: filepath.Join(home, ".claude.json"), JSONKeys: []string{"oauthAccount", "userID"}, Optional: true},
+	}
+}
+
+// DescribeCurrent 取邮箱作为账号名，带上组织名（如果有）。
+// 读不出就返回空串，让上层用时间戳兜底——绝不编一个像模像样的假名字。
+func (claudeCode) DescribeCurrent() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	raw, err := os.ReadFile(filepath.Join(home, ".claude.json"))
+	if err != nil {
+		return ""
+	}
+	var d struct {
+		OAuthAccount struct {
+			EmailAddress     string `json:"emailAddress"`
+			OrganizationName string `json:"organizationName"`
+		} `json:"oauthAccount"`
+	}
+	if json.Unmarshal(raw, &d) != nil || d.OAuthAccount.EmailAddress == "" {
+		return ""
+	}
+	if org := d.OAuthAccount.OrganizationName; org != "" {
+		return d.OAuthAccount.EmailAddress + " · " + org
+	}
+	return d.OAuthAccount.EmailAddress
+}
+
 // -- 首次运行向导 -----------------------------------------------------------
 
 // ensureOnboarded 把 claude 的首次运行向导标记为已完成。

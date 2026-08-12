@@ -395,6 +395,66 @@ func (b *BaseApi) WsViAuthLogin(c *gin.Context) {
 }
 
 // @Tags ViPanel
+// @Summary 列出某个 harness 的已保存账号
+// @Router /ai/console/accounts [get]
+func (b *BaseApi) ListViAccounts(c *gin.Context) {
+	list, err := vipanel.Accounts(c.Query("harness"))
+	if err != nil {
+		helper.BadRequest(c, err)
+		return
+	}
+	helper.SuccessWithData(c, list)
+}
+
+// @Tags ViPanel
+// @Summary 把当前登录状态存成一个账号
+// @Router /ai/console/accounts/capture [post]
+func (b *BaseApi) CaptureViAccount(c *gin.Context) {
+	var req dto.ViAccountCapture
+	if err := helper.CheckBindAndValidate(&req, c); err != nil {
+		return
+	}
+	a, err := vipanel.CaptureCurrent(req.Harness, req.Label)
+	if err != nil {
+		helper.BadRequest(c, err)
+		return
+	}
+	helper.SuccessWithData(c, a)
+}
+
+// @Tags ViPanel
+// @Summary 切换到某个已保存账号
+// @Router /ai/console/accounts/activate [post]
+func (b *BaseApi) ActivateViAccount(c *gin.Context) {
+	var req dto.ViAccountRef
+	if err := helper.CheckBindAndValidate(&req, c); err != nil {
+		return
+	}
+	if err := vipanel.Activate(req.Harness, req.ID); err != nil {
+		helper.BadRequest(c, err)
+		return
+	}
+	// 切换只改磁盘上的配置，**已经跑着的会话不会跟着换**——
+	// agent 进程在启动时就把凭据读进去了。如实告诉界面，让它提示重启会话。
+	helper.SuccessWithData(c, gin.H{"needRestart": vipanel.M().AliveCount(req.Harness) > 0})
+}
+
+// @Tags ViPanel
+// @Summary 删除一个已保存账号
+// @Router /ai/console/accounts/delete [post]
+func (b *BaseApi) DeleteViAccount(c *gin.Context) {
+	var req dto.ViAccountRef
+	if err := helper.CheckBindAndValidate(&req, c); err != nil {
+		return
+	}
+	if err := vipanel.Forget(req.Harness, req.ID); err != nil {
+		helper.BadRequest(c, err)
+		return
+	}
+	helper.Success(c)
+}
+
+// @Tags ViPanel
 // @Summary 安装 harness（WebSocket，实时输出）
 // @Param harness query string true "harness id"
 // @Router /ai/console/harness/install [get]

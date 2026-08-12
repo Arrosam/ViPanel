@@ -2,7 +2,9 @@ package vipanel
 
 import (
 	"encoding/json"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -233,6 +235,50 @@ func (codexCLI) LoginSpec(string) PtySpec {
 		Cols: agentCols,
 		Rows: agentRows,
 	}
+}
+
+// AccountArtifacts：codex 的凭据只有一份 ~/.codex/auth.json。
+//
+// Optional 是必需的：**登录之前这个文件根本不存在**（真机上确认过，
+// 未登录的 ~/.codex 里只有 log、sqlite 和 installation_id）。
+// 不标 Optional 的话，没登录时列账号会直接报错。
+//
+// config.toml 不在里面：那是模型和 MCP 的配置，跟着账号走是错的。
+func (codexCLI) AccountArtifacts() []AccountArtifact {
+	home, _ := os.UserHomeDir()
+	return []AccountArtifact{
+		{Path: filepath.Join(home, ".codex", "auth.json"), Optional: true},
+	}
+}
+
+// DescribeCurrent 从 auth.json 里找一个能认人的字段。
+//
+// 这个文件的结构没有公开文档，所以**按几个候选键去试，试不到就返回空串**，
+// 而不是假设某个键一定在。猜错的代价是账号列表里出现一个看不懂的名字，
+// 那比用时间戳更糟。
+func (codexCLI) DescribeCurrent() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	raw, err := os.ReadFile(filepath.Join(home, ".codex", "auth.json"))
+	if err != nil {
+		return ""
+	}
+	var d map[string]any
+	if json.Unmarshal(raw, &d) != nil {
+		return ""
+	}
+	for _, k := range []string{"email", "account_id", "accountId"} {
+		if v, ok := d[k].(string); ok && v != "" {
+			return v
+		}
+	}
+	// 只有 API key 的情况：说明是密钥登录，如实这么说，不去暴露密钥本身
+	if _, ok := d["OPENAI_API_KEY"]; ok {
+		return "API key"
+	}
+	return ""
 }
 
 func (codexCLI) Logout() error {

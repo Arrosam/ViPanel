@@ -59,8 +59,15 @@
                  @mousedown="startDrag('rail', $event)" @dblclick="railW = 232; persist()" />
 
         <div class="vp-console__main">
+            <!-- 没有会话时显示 Agent 管理，而不是一句「请选择会话」。
+                 首次登录的用户在这里第一次看到有哪些 Agent、装没装、登没登。 -->
             <div v-if="!current" class="vp-console__blank">
-                <el-empty :image-size="72" :description="$t('aiTools.console.pickHint')" />
+                <AgentManager
+                    ref="managerRef"
+                    @login="(h) => loginRef?.open(h)"
+                    @install="(h) => installRef?.open(h.id, h.displayName, h.install.note)"
+                    @new-session="dirPickerRef?.open(currentSession?.cwd)"
+                />
             </div>
             <template v-else>
                 <div class="vp-console__bar">
@@ -110,7 +117,8 @@
             </template>
         </div>
         </div>
-        <AgentLogin ref="loginRef" @done="loadAuth" />
+        <AgentLogin ref="loginRef" @done="onAuthChanged" />
+        <AgentInstall ref="installRef" @done="onAuthChanged" />
         <Permission :req="perm" />
         <History ref="historyRef" @opened="onHistoryOpened" />
         <DirPicker ref="dirPickerRef" @created="onHistoryOpened" />
@@ -127,6 +135,8 @@ import SessionList from './components/session-list.vue';
 import FilePanel from './components/file-panel.vue';
 import Chat from './components/chat.vue';
 import AgentLogin from './components/agent-login.vue';
+import AgentInstall from './components/agent-install.vue';
+import AgentManager from './components/agent-manager.vue';
 import Permission from './components/permission.vue';
 import History from './components/history.vue';
 import DirPicker from './components/dir-picker.vue';
@@ -159,6 +169,14 @@ const terminalRef = ref();
 // 一进来就占掉半屏，既挤压聊天也让人以为它是主角。
 const showTerm = ref(localStorage.getItem('vp.showTerm') === '1');
 const loginRef = ref();
+const installRef = ref();
+const managerRef = ref();
+
+// 登录或安装完成后，首屏那块要跟着刷新——它显示的正是这两件事的状态。
+const onAuthChanged = async () => {
+    await loadAuth();
+    await managerRef.value?.load();
+};
 const auth = ref<ViPanel.AuthState>({ supported: false, loggedIn: true, hookInstalled: true });
 const events = ref<any[]>([]);
 const perm = ref<any>(null);

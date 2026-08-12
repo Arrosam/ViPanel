@@ -27,6 +27,14 @@ export namespace ViPanel {
         capabilities: Caps;
     }
 
+    export interface Account {
+        id: string;
+        label: string;
+        // 和当前 live 配置一致的那个。由后端比对指纹得出，不是前端记的。
+        active: boolean;
+        addedAt: number;
+    }
+
     export interface Prereq {
         binary: string;
         hint: string;

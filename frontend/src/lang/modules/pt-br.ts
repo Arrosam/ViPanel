@@ -755,6 +755,7 @@ const message = {
             signIn: 'Entrar',
             loginStart: 'Start login',
             loginStep1: 'Open this link on your own device',
+            loginStep2Enter: 'Digite nessa página o código de uso único abaixo',
             loginStep2: 'Copy the authorization code shown there',
             loginStep3: 'Paste the code back here',
             loginWaitLink: 'Waiting for the link…',

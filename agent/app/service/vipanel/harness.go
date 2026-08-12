@@ -298,6 +298,31 @@ func timeoutDecisionFor(sessionID string) Decision {
 	return DecideAsk
 }
 
+// LoginCodeSource 由「登录时终端发出一个码、要用户拿到别处去输」的 harness 实现。
+//
+// 这是两种登录流的**方向差异**，不是同一件事的两种写法：
+//   - Claude：浏览器给码，用户粘回终端。关键信息是那个一次性链接。
+//   - Codex 设备码流：终端给码，用户输进浏览器。链接是固定的通用地址
+//     （https://auth.openai.com/codex/device），**关键信息是那个码**，
+//     而且 15 分钟过期。
+//
+// 面板原来只把链接挑出来显眼展示，对 Codex 来说恰好把不重要的那个放大了，
+// 真正要用的码埋在一堆带 ANSI 转义的原始输出里。
+//
+// 怎么从输出里认出那个码是 harness 私有的知识，所以由它自己声明。
+type LoginCodeSource interface {
+	// LoginCode 从一段原始输出里挑出一次性码，挑不到返回空串。
+	LoginCode(chunk []byte) string
+}
+
+// ExtractLoginCode 问某个 harness：这段输出里有没有要展示给用户的码。
+func ExtractLoginCode(harnessID string, chunk []byte) string {
+	if src, ok := Get(harnessID).(LoginCodeSource); ok {
+		return src.LoginCode(chunk)
+	}
+	return ""
+}
+
 // TitleSource 由「自己会给会话起标题」的 harness 实现。
 //
 // **标题藏在 harness 私有的记录格式里，字段名是它的私有知识。**

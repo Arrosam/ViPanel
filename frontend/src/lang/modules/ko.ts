@@ -746,6 +746,7 @@ const message = {
             signIn: '로그인',
             loginStart: 'Start login',
             loginStep1: 'Open this link on your own device',
+            loginStep2Enter: '해당 페이지에 아래 일회용 코드를 입력합니다',
             loginStep2: 'Copy the authorization code shown there',
             loginStep3: 'Paste the code back here',
             loginWaitLink: 'Waiting for the link…',

@@ -723,6 +723,7 @@ const message = {
             signIn: '登入',
             loginStart: '開始登入',
             loginStep1: '在你自己的裝置上開啟此連結',
+            loginStep2Enter: '在該頁面輸入下面這個一次性驗證碼',
             loginStep2: '複製頁面顯示的授權碼',
             loginStep3: '將授權碼貼上至此處',
             loginWaitLink: '等待授權連結…',

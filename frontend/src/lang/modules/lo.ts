@@ -753,6 +753,7 @@ const message = {
             signIn: 'ເຂົ້າສູ່ລະບົບ',
             loginStart: 'Start login',
             loginStep1: 'Open this link on your own device',
+            loginStep2Enter: 'ໃສ່ລະຫັດຄັ້ງດຽວຂ້າງລຸ່ມນີ້ໃນໜ້ານັ້ນ',
             loginStep2: 'Copy the authorization code shown there',
             loginStep3: 'Paste the code back here',
             loginWaitLink: 'Waiting for the link…',

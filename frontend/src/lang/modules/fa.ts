@@ -747,6 +747,7 @@ const message = {
             signIn: 'ورود',
             loginStart: 'Start login',
             loginStep1: 'Open this link on your own device',
+            loginStep2Enter: 'کد یک‌بارمصرف زیر را در آن صفحه وارد کنید',
             loginStep2: 'Copy the authorization code shown there',
             loginStep3: 'Paste the code back here',
             loginWaitLink: 'Waiting for the link…',

@@ -100,3 +100,46 @@ func TestCodexHookConfigQuotesPath(t *testing.T) {
 		}
 	}
 }
+
+// 一次性码要能从真实输出里挑出来——连带 ANSI 转义一起。
+//
+// 样本是真机上跑 `codex login --device-auth` 抓的原文。
+func TestCodexLoginCodeFromRealOutput(t *testing.T) {
+	real := "2. Enter this one-time code \x1b[90m(expires in 15 minutes)\x1b[0m\r\n" +
+		"   \x1b[94mNTDC-6BNE8\x1b[0m\r\n"
+	if got := Get("codex").(LoginCodeSource).LoginCode([]byte(real)); got != "NTDC-6BNE8" {
+		t.Errorf("挑出来的是 %q，要的是 NTDC-6BNE8", got)
+	}
+}
+
+// 不该在普通输出里认出码——给用户一个错的码比不给更糟。
+func TestCodexLoginCodeDoesNotFalsePositive(t *testing.T) {
+	src := Get("codex").(LoginCodeSource)
+	for _, s := range []string{
+		"Welcome to Codex [v0.147.0]",
+		"1. Open this link in your browser and sign in to your account",
+		"   https://auth.openai.com/codex/device",
+		"Continue only if you started this login in Codex.",
+		"added 2 packages in 5s",
+	} {
+		if got := src.LoginCode([]byte(s)); got != "" {
+			t.Errorf("%q 里不该认出码，却得到 %q", s, got)
+		}
+	}
+}
+
+// Claude 的登录方向相反（浏览器给码、粘回终端），它不该声明这个能力。
+func TestClaudeHasNoLoginCode(t *testing.T) {
+	if _, ok := Get("claude-code").(LoginCodeSource); ok {
+		t.Error("claude 的码是粘回终端的，不该声明 LoginCodeSource")
+	}
+}
+
+// CODEX_HOME 必须被认——写死 ~/.codex 会让快照读写一个 codex 不看的位置。
+func TestCodexHonorsCodexHome(t *testing.T) {
+	t.Setenv("CODEX_HOME", "/tmp/vp-codex-home-test")
+	arts := Get("codex").(AccountStore).AccountArtifacts()
+	if len(arts) == 0 || !strings.HasPrefix(arts[0].Path, "/tmp/vp-codex-home-test/") {
+		t.Errorf("CODEX_HOME 没被认，artifact 路径是 %v", arts)
+	}
+}

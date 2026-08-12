@@ -24,7 +24,21 @@
                     </div>
                     <span v-else class="vp-login__waiting">{{ $t('aiTools.console.loginWaitLink') }}</span>
                 </li>
-                <li>{{ $t('aiTools.console.loginStep2') }}</li>
+                <li>
+                    <!-- 第二步的措辞取决于码的方向。
+                         Claude：页面给码 → 复制它。
+                         Codex 设备码流：终端给码 → 输进页面。
+                         用同一句话会把用户指向一个不存在的动作。 -->
+                    {{ needsCodeInput ? $t('aiTools.console.loginStep2') : $t('aiTools.console.loginStep2Enter') }}
+                    <!-- 设备码流：码是终端发出来、要用户输进浏览器的。
+                         它 15 分钟过期，必须显眼，不能只躺在原始输出里。 -->
+                    <div v-if="authCode" class="vp-login__otc">
+                        <code>{{ authCode }}</code>
+                        <el-button link size="small" @click="copy(authCode)">
+                            {{ $t('aiTools.console.copy') }}
+                        </el-button>
+                    </div>
+                </li>
                 <!-- 码的方向由 harness 声明。方向搞反的话，界面会要用户去粘一个
                      根本不存在的东西——设备码流里码是终端发出去的，不是收回来的。 -->
                 <li v-if="needsCodeInput">
@@ -75,6 +89,7 @@ const harnessName = ref('');
 const modes = ref<ViPanel.Caps['loginModes']>([]);
 const mode = ref('');
 const urls = ref<string[]>([]);
+const authCode = ref('');
 const code = ref('');
 const raw = ref('');
 let ws: WebSocket | undefined;
@@ -101,6 +116,7 @@ const open = async (id?: string) => {
     visible.value = true;
     running.value = false;
     urls.value = [];
+    authCode.value = '';
     code.value = '';
     raw.value = '';
     harness.value = id || 'claude-code';
@@ -128,6 +144,7 @@ const start = () => {
         const m = JSON.parse(ev.data);
         if (m.type === 'cmd') raw.value = (raw.value + decode(m.data)).slice(-8000);
         else if (m.type === 'auth_url' && !urls.value.includes(m.url)) urls.value.push(m.url);
+        else if (m.type === 'auth_code') authCode.value = m.code;
         else if (m.type === 'auth_done') {
             emit('done');
             visible.value = false;
@@ -166,6 +183,19 @@ defineExpose({ open });
 </script>
 
 <style lang="scss" scoped>
+.vp-login__otc {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 6px;
+}
+.vp-login__otc code {
+    padding: 4px 10px;
+    border-radius: 4px;
+    background: var(--el-fill-color);
+    font: 600 17px/1.4 var(--el-font-family-mono, monospace);
+    letter-spacing: 1px;
+}
 .vp-login__note {
     margin: 8px 0 0;
     font-size: 12px;

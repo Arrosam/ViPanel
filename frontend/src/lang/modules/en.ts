@@ -760,6 +760,7 @@ const message = {
             signIn: 'Sign in',
             loginStart: 'Start login',
             loginStep1: 'Open this link on your own device',
+            loginStep2Enter: 'Enter this one-time code on that page',
             loginStep2: 'Copy the authorization code shown there',
             loginStep3: 'Paste the code back here',
             loginWaitLink: 'Waiting for the link…',

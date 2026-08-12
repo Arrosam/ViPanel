@@ -379,6 +379,8 @@ func (b *BaseApi) WsViAuthLogin(c *gin.Context) {
 	// 把授权链接从原始输出里挑出来单独推给前端。
 	// 服务器上没人看屏幕，链接必须送到用户自己的设备上去打开。
 	seen := map[string]bool{}
+	harnessID := c.DefaultQuery("harness", vipanel.DefaultHarness)
+	sentCode := ""
 	bridge.Tap(func(chunk []byte) {
 		for _, u := range vipanel.ExtractURLs(chunk) {
 			if seen[u] {
@@ -386,6 +388,12 @@ func (b *BaseApi) WsViAuthLogin(c *gin.Context) {
 			}
 			seen[u] = true
 			_ = bridge.Send(gin.H{"type": "auth_url", "url": u})
+		}
+		// 设备码流里，**码才是用户真正要用的东西**，而且 15 分钟过期。
+		// 埋在原始输出里等于没给。哪些 harness 有这种码由它们自己声明。
+		if code := vipanel.ExtractLoginCode(harnessID, chunk); code != "" && code != sentCode {
+			sentCode = code
+			_ = bridge.Send(gin.H{"type": "auth_code", "code": code})
 		}
 	})
 	bridge.Run()

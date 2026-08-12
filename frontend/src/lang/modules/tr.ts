@@ -757,6 +757,7 @@ const message = {
             signIn: 'Giriş yap',
             loginStart: 'Start login',
             loginStep1: 'Open this link on your own device',
+            loginStep2Enter: 'Bu tek kullanımlık kodu o sayfaya girin',
             loginStep2: 'Copy the authorization code shown there',
             loginStep3: 'Paste the code back here',
             loginWaitLink: 'Waiting for the link…',

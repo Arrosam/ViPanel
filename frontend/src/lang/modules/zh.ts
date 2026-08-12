@@ -726,6 +726,7 @@ const message = {
             signIn: '登录',
             loginStart: '开始登录',
             loginStep1: '在你自己的设备上打开此链接',
+            loginStep2Enter: '在该页面输入下面这个一次性验证码',
             loginStep2: '复制页面显示的授权码',
             loginStep3: '将授权码粘贴到此处',
             loginWaitLink: '等待授权链接…',

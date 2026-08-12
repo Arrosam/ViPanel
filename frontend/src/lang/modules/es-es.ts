@@ -759,6 +759,7 @@ const message = {
             signIn: 'Iniciar sesión',
             loginStart: 'Start login',
             loginStep1: 'Open this link on your own device',
+            loginStep2Enter: 'Introduce en esa página el código de un solo uso',
             loginStep2: 'Copy the authorization code shown there',
             loginStep3: 'Paste the code back here',
             loginWaitLink: 'Waiting for the link…',

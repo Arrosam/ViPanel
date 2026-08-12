@@ -754,6 +754,7 @@ const message = {
             signIn: 'ログイン',
             loginStart: 'Start login',
             loginStep1: 'Open this link on your own device',
+            loginStep2Enter: 'そのページで下記のワンタイムコードを入力します',
             loginStep2: 'Copy the authorization code shown there',
             loginStep3: 'Paste the code back here',
             loginWaitLink: 'Waiting for the link…',

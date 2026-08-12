@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -245,10 +246,23 @@ func (codexCLI) LoginSpec(string) PtySpec {
 //
 // config.toml 不在里面：那是模型和 MCP 的配置，跟着账号走是错的。
 func (codexCLI) AccountArtifacts() []AccountArtifact {
-	home, _ := os.UserHomeDir()
 	return []AccountArtifact{
-		{Path: filepath.Join(home, ".codex", "auth.json"), Optional: true},
+		{Path: filepath.Join(codexHome(), "auth.json"), Optional: true},
 	}
+}
+
+// codexHome 是 codex 的配置目录。
+//
+// **不能写死成 ~/.codex**：codex 认 $CODEX_HOME，它自己的 --help 里就写着
+// "Layer $CODEX_HOME/<name>.config.toml on top of the base user config"。
+// 写死的话，在设了这个变量的机器上，账号快照会读写一个 codex 根本不看的位置——
+// 表现为「保存成功了，但切回来没有任何效果」。
+func codexHome() string {
+	if v := strings.TrimSpace(os.Getenv("CODEX_HOME")); v != "" {
+		return v
+	}
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".codex")
 }
 
 // DescribeCurrent 从 auth.json 里找一个能认人的字段。
@@ -257,11 +271,7 @@ func (codexCLI) AccountArtifacts() []AccountArtifact {
 // 而不是假设某个键一定在。猜错的代价是账号列表里出现一个看不懂的名字，
 // 那比用时间戳更糟。
 func (codexCLI) DescribeCurrent() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	raw, err := os.ReadFile(filepath.Join(home, ".codex", "auth.json"))
+	raw, err := os.ReadFile(filepath.Join(codexHome(), "auth.json"))
 	if err != nil {
 		return ""
 	}
@@ -280,6 +290,22 @@ func (codexCLI) DescribeCurrent() string {
 	}
 	return ""
 }
+
+// LoginCode 从设备码流的输出里挑出那个一次性码。
+//
+// 实测输出（已剥 ANSI）：
+//
+//  2. Enter this one-time code (expires in 15 minutes)
+//     NTDC-6BNE8
+//
+// 两次采样都是「4 位 - 5 位」（K33V-9MBAJ、NTDC-6BNE8），这里放宽到 4-6 位，
+// 但仍然要求全大写字母数字加一个连字符——放太宽会把输出里别的东西认成码，
+// 而给用户一个错的码比不给更糟。
+func (codexCLI) LoginCode(chunk []byte) string {
+	return codexCodeRe.FindString(string(csiPattern.ReplaceAll(chunk, nil)))
+}
+
+var codexCodeRe = regexp.MustCompile(`\b[A-Z0-9]{4}-[A-Z0-9]{4,6}\b`)
 
 func (codexCLI) Logout() error {
 	return exec.Command("codex", "logout").Run()

@@ -717,6 +717,7 @@ const message = {
             removeAccountConfirm: '刪除這個已儲存的帳號？目前登入狀態不受影響。',
             remove: '刪除',
             ready: '可用',
+            agents: 'Agent',
             notInstalled: '未安裝',
             harnessPick: '執行框架',
             signIn: '登入',

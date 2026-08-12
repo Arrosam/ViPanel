@@ -740,6 +740,7 @@ const message = {
             removeAccountConfirm: '저장된 이 계정을 삭제할까요? 현재 로그인 상태에는 영향이 없습니다.',
             remove: '삭제',
             ready: '사용 가능',
+            agents: '에이전트',
             notInstalled: '설치되지 않음',
             harnessPick: '하네스',
             signIn: '로그인',

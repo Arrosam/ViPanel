@@ -755,6 +755,7 @@ const message = {
             removeAccountConfirm: 'Buang akaun tersimpan ini? Log masuk semasa tidak terjejas.',
             remove: 'Buang',
             ready: 'Sedia',
+            agents: 'Ejen',
             notInstalled: 'Belum dipasang',
             harnessPick: 'Kerangka',
             signIn: 'Log masuk',

@@ -754,6 +754,7 @@ const message = {
             removeAccountConfirm: 'Remove this saved account? The live login is not affected.',
             remove: 'Remove',
             ready: 'Ready',
+            agents: 'Agents',
             notInstalled: 'Not installed',
             harnessPick: 'Harness',
             signIn: 'Sign in',

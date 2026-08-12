@@ -747,6 +747,7 @@ const message = {
             removeAccountConfirm: 'ລຶບບັນຊີທີ່ບັນທຶກໄວ້ນີ້ບໍ? ການເຂົ້າສູ່ລະບົບປັດຈຸບັນບໍ່ຖືກກະທົບ.',
             remove: 'ລຶບ',
             ready: 'ພ້ອມໃຊ້',
+            agents: 'ຕົວແທນ',
             notInstalled: 'ຍັງບໍ່ໄດ້ຕິດຕັ້ງ',
             harnessPick: 'ກອບການເຮັດວຽກ',
             signIn: 'ເຂົ້າສູ່ລະບົບ',

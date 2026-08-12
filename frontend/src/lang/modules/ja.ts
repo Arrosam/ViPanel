@@ -748,6 +748,7 @@ const message = {
             removeAccountConfirm: '保存済みのこのアカウントを削除しますか？現在のログイン状態には影響しません。',
             remove: '削除',
             ready: '利用可能',
+            agents: 'エージェント',
             notInstalled: '未インストール',
             harnessPick: 'ハーネス',
             signIn: 'ログイン',

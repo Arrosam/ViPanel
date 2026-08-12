@@ -753,6 +753,7 @@ const message = {
             removeAccountConfirm: '¿Eliminar esta cuenta guardada? La sesión actual no se ve afectada.',
             remove: 'Eliminar',
             ready: 'Listo',
+            agents: 'Agentes',
             notInstalled: 'No instalado',
             harnessPick: 'Entorno',
             signIn: 'Iniciar sesión',

@@ -747,6 +747,7 @@ const message = {
             removeAccountConfirm: 'Удалить сохранённый аккаунт? Текущий вход не затрагивается.',
             remove: 'Удалить',
             ready: 'Готово',
+            agents: 'Агенты',
             notInstalled: 'Не установлено',
             harnessPick: 'Оболочка',
             signIn: 'Войти',

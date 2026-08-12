@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -213,11 +214,21 @@ func Installed(h Harness) bool {
 	return err == nil
 }
 
+// List 返回全部 harness，**顺序稳定**。
+//
+// registry 是 map，直接遍历的顺序每次都不一样——界面上表现为几张卡片
+// 每次刷新都在换位置。默认 harness 排第一，其余按 id 字典序。
 func List() []Harness {
 	out := make([]Harness, 0, len(registry))
 	for _, h := range registry {
 		out = append(out, h)
 	}
+	sort.Slice(out, func(i, j int) bool {
+		if (out[i].ID() == DefaultHarness) != (out[j].ID() == DefaultHarness) {
+			return out[i].ID() == DefaultHarness
+		}
+		return out[i].ID() < out[j].ID()
+	})
 	return out
 }
 

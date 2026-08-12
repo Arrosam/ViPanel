@@ -720,6 +720,7 @@ const message = {
             removeAccountConfirm: '删除这个已保存的账号？当前登录状态不受影响。',
             remove: '删除',
             ready: '可用',
+            agents: 'Agent',
             notInstalled: '未安装',
             harnessPick: '运行框架',
             signIn: '登录',

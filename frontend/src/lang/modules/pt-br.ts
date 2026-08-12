@@ -749,6 +749,7 @@ const message = {
             removeAccountConfirm: 'Remover esta conta salva? O login atual não é afetado.',
             remove: 'Remover',
             ready: 'Pronto',
+            agents: 'Agentes',
             notInstalled: 'Não instalado',
             harnessPick: 'Ambiente',
             signIn: 'Entrar',

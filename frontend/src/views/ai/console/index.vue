@@ -32,6 +32,12 @@
                 <button class="vp-rtab" :class="{ on: tab === 'files' }" @click="tab = 'files'">
                     {{ $t('aiTools.console.files') }}
                 </button>
+                <!-- Agent 管理必须随时可达。
+                     只放在「没有会话」的空状态里是不够的：有会话的用户永远进不去，
+                     而换账号、装新 agent 恰恰是有会话之后才会想做的事。 -->
+                <button class="vp-rtab" :class="{ on: tab === 'agents' }" @click="openAgents">
+                    {{ $t('aiTools.console.agents') }}
+                </button>
             </div>
             <SessionList
                 v-show="tab === 'sessions'"
@@ -61,7 +67,7 @@
         <div class="vp-console__main">
             <!-- 没有会话时显示 Agent 管理，而不是一句「请选择会话」。
                  首次登录的用户在这里第一次看到有哪些 Agent、装没装、登没登。 -->
-            <div v-if="!current" class="vp-console__blank">
+            <div v-if="tab === 'agents' || !current" class="vp-console__blank">
                 <AgentManager
                     ref="managerRef"
                     @login="(h) => loginRef?.open(h)"
@@ -180,7 +186,15 @@ const onAuthChanged = async () => {
 const auth = ref<ViPanel.AuthState>({ supported: false, loggedIn: true, hookInstalled: true });
 const events = ref<any[]>([]);
 const perm = ref<any>(null);
-const tab = ref<'sessions' | 'files'>('sessions');
+const tab = ref<'sessions' | 'files' | 'agents'>('sessions');
+
+// 切到 Agent 页签时重新拉一次：安装状态和登录状态随时可能在别处变了
+// （比如用户自己 ssh 上去装了 codex）。
+const openAgents = async () => {
+    tab.value = 'agents';
+    await nextTick();
+    await managerRef.value?.load();
+};
 const historyRef = ref();
 const dirPickerRef = ref();
 const settingsRef = ref();

@@ -741,6 +741,7 @@ const message = {
             removeAccountConfirm: 'این حساب ذخیره‌شده حذف شود؟ ورود فعلی تحت تأثیر قرار نمی‌گیرد.',
             remove: 'حذف',
             ready: 'آماده',
+            agents: 'عامل‌ها',
             notInstalled: 'نصب نشده',
             harnessPick: 'چارچوب اجرا',
             signIn: 'ورود',

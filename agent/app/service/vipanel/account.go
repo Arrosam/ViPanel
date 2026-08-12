@@ -181,6 +181,18 @@ func CaptureCurrent(harnessID, label string) (Account, error) {
 	if !ok {
 		return Account{}, fmt.Errorf("%s 不支持账号管理", h.DisplayName())
 	}
+	// **先问 harness 自己「现在到底登录了没有」，不要只看文件在不在。**
+	//
+	// 这条是真机上撞出来的：claude 登出之后 ~/.claude/.credentials.json
+	// 并不会消失，它留下一个 expiresAt=0 的空壳，而 ~/.claude.json 里的
+	// oauthAccount 还留着上一个账号的邮箱。只看文件存在的话，面板会把这个
+	// 空壳存成一个名字像模像样的「账号」，用户以后切过去只会把自己登出。
+	if a, ok := h.(Authenticator); ok {
+		if st := a.AuthStatus(); st.Supported && !st.LoggedIn {
+			return Account{}, fmt.Errorf("%s 当前未登录，没有账号可保存", h.DisplayName())
+		}
+	}
+
 	arts := st.AccountArtifacts()
 	blobs, err := readArtifacts(arts)
 	if err != nil {
@@ -345,7 +357,14 @@ func pickJSONKeys(raw []byte, keys []string) ([]byte, error) {
 func autosaveLive(harnessID string, st AccountStore) error {
 	live := liveFingerprint(st)
 	if live == "" {
-		return nil // 当前没登录，没什么可存
+		return nil // 当前什么都没有，没什么可存
+	}
+	// 空壳同样不该被补存——CaptureCurrent 会拒绝，这里提前退出，
+	// 免得把一次正常的切换变成一个看不懂的错误。
+	if a, ok := Get(harnessID).(Authenticator); ok {
+		if s := a.AuthStatus(); s.Supported && !s.LoggedIn {
+			return nil
+		}
 	}
 	list, err := Accounts(harnessID)
 	if err != nil {

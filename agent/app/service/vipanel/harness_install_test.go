@@ -120,3 +120,24 @@ func TestMinVersionPrereqsAreQueryable(t *testing.T) {
 		}
 	}
 }
+
+// harness 列表的顺序必须稳定。
+// registry 是 map，直接遍历会让界面上的卡片每次刷新都换位置。
+func TestListOrderIsStable(t *testing.T) {
+	first := []string{}
+	for _, h := range List() {
+		first = append(first, h.ID())
+	}
+	if len(first) == 0 || first[0] != DefaultHarness {
+		t.Errorf("默认 harness 应当排第一，实际顺序：%v", first)
+	}
+	for i := 0; i < 20; i++ {
+		got := []string{}
+		for _, h := range List() {
+			got = append(got, h.ID())
+		}
+		if strings.Join(got, ",") != strings.Join(first, ",") {
+			t.Fatalf("第 %d 次顺序变了：%v != %v", i, got, first)
+		}
+	}
+}

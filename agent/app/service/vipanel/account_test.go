@@ -160,3 +160,23 @@ func TestForgetRejectsPathTraversal(t *testing.T) {
 		}
 	}
 }
+
+// 登出之后的空壳不能被存成账号。
+//
+// claude 登出时不会删掉 .credentials.json，只把 expiresAt 置 0，
+// 而 ~/.claude.json 里的 oauthAccount 还留着上一个账号的邮箱。
+// 只看文件在不在的话，会存出一个名字像模像样、实际是登出态的「账号」——
+// 用户以后切过去只会把自己登出。真机上就是这么撞出来的。
+func TestCaptureRefusesWhenLoggedOut(t *testing.T) {
+	h := Get("claude-code")
+	a, ok := h.(Authenticator)
+	if !ok {
+		t.Skip("claude 没实现 Authenticator")
+	}
+	if a.AuthStatus().LoggedIn {
+		t.Skip("本机 claude 已登录，这条断言在登出态才有意义")
+	}
+	if _, err := CaptureCurrent("claude-code", ""); err == nil {
+		t.Error("登出状态下不该允许保存账号")
+	}
+}

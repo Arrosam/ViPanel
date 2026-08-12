@@ -751,6 +751,7 @@ const message = {
             removeAccountConfirm: 'Kaydedilmiş bu hesap silinsin mi? Mevcut oturum etkilenmez.',
             remove: 'Kaldır',
             ready: 'Hazır',
+            agents: 'Aracılar',
             notInstalled: 'Kurulu değil',
             harnessPick: 'Çalışma ortamı',
             signIn: 'Giriş yap',

@@ -211,29 +211,6 @@ func (codexCLI) Endpoints() []Endpoint {
 	}
 }
 
-// ProviderEnv：只给密钥。
-//
-// **codex 不认 OPENAI_BASE_URL**——在它的二进制里 0 命中，而
-// model_providers / base_url / env_key / wire_api 都在。所以地址不能靠
-// 环境变量传，只能走配置；这里只负责把密钥放进 env_key 指名的那个变量。
-func (codexCLI) ProviderEnv(p Provider) []string {
-	return []string{"OPENAI_API_KEY=" + strings.TrimSpace(p.APIKey)}
-}
-
-// ProviderArgs：地址走 -c 内联 TOML，和钩子、MCP 同一条路——
-// 不往用户的 config.toml 里写一个字节。
-//
-// wire_api 用 "chat"：中转端点绝大多数实现的是 OpenAI 的 chat completions，
-// 而 responses 那套只有官方稳定支持。猜错的表现是每次请求 404。
-func (codexCLI) ProviderArgs(p Provider) []string {
-	base, _ := json.Marshal(strings.TrimSpace(p.BaseURL))
-	return []string{
-		"-c", `model_provider="vipanel"`,
-		"-c", `model_providers.vipanel={name="ViPanel 中转", base_url=` + string(base) +
-			`, env_key="OPENAI_API_KEY", wire_api="chat"}`,
-	}
-}
-
 // -- 登录 ---------------------------------------------------------------------
 
 func (c codexCLI) AuthStatus() AuthState {

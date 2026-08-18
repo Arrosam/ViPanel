@@ -27,6 +27,19 @@ export namespace ViPanel {
         capabilities: Caps;
     }
 
+    export interface Outbound {
+        enabled: boolean;
+        url: string;
+    }
+
+    export interface ReachResult {
+        url: string;
+        purpose: string;
+        ok: boolean;
+        status: number;
+        detail: string;
+    }
+
     export interface Account {
         id: string;
         label: string;

@@ -28,7 +28,6 @@ func (a *AIToolsRouter) InitRouter(Router *gin.RouterGroup) {
 		aiToolsRouter.GET("/console/harness/install", baseApi.WsViHarnessInstall)
 		aiToolsRouter.GET("/console/outbound", baseApi.GetViOutbound)
 		aiToolsRouter.POST("/console/outbound/proxy", baseApi.UpdateViProxy)
-		aiToolsRouter.POST("/console/outbound/provider", baseApi.UpdateViProvider)
 		aiToolsRouter.POST("/console/outbound/check", baseApi.CheckViReachability)
 		aiToolsRouter.GET("/console/accounts", baseApi.ListViAccounts)
 		aiToolsRouter.POST("/console/accounts/capture", baseApi.CaptureViAccount)

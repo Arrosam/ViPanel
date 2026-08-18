@@ -408,22 +408,6 @@ func (claudeCode) Endpoints() []Endpoint {
 	return []Endpoint{{URL: "https://api.anthropic.com/v1/models", Purpose: "Anthropic API"}}
 }
 
-// ProviderEnv：claude 认环境变量。这几个名字是从它的二进制里查出来的
-// （ANTHROPIC_BASE_URL 49 处、ANTHROPIC_AUTH_TOKEN 50 处），不是照文档抄的。
-//
-// 用 AUTH_TOKEN 而不是 API_KEY：中转端点通常发的是 Bearer 令牌，
-// 而 ANTHROPIC_API_KEY 会走 x-api-key 头。两个都设会让行为取决于
-// 它内部的优先级，那是我们控制不了的一层。
-func (claudeCode) ProviderEnv(p Provider) []string {
-	return []string{
-		"ANTHROPIC_BASE_URL=" + strings.TrimSpace(p.BaseURL),
-		"ANTHROPIC_AUTH_TOKEN=" + strings.TrimSpace(p.APIKey),
-	}
-}
-
-// ProviderArgs：claude 不需要命令行参数，环境变量就够。
-func (claudeCode) ProviderArgs(Provider) []string { return nil }
-
 // -- 账号 ---------------------------------------------------------------------
 
 // AccountArtifacts：claude 的登录态分散在两处，都是真机上核对过的。

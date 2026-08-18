@@ -61,3 +61,15 @@ export const activateAccount = (harness: string, id: string) =>
 
 export const deleteAccount = (harness: string, id: string) =>
     http.post(`/ai/console/accounts/delete`, { harness, id });
+
+// -- 出站代理 -----------------------------------------------------------------
+//
+// 香港等地区连不上 Anthropic / OpenAI（403 按出口拒绝），
+// 让控制台的出站走本机 VPN 客户端开的本地代理端口。
+export const getOutbound = () => http.get<ViPanel.Outbound>(`/ai/console/outbound`);
+
+export const updateProxy = (enabled: boolean, url: string) =>
+    http.post<ViPanel.Outbound>(`/ai/console/outbound/proxy`, { enabled, url });
+
+export const checkReachability = (harness: string) =>
+    http.post<ViPanel.ReachResult[]>(`/ai/console/outbound/check`, { harness });

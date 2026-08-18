@@ -14,6 +14,38 @@
                 <div v-else class="vp-set__note">{{ $t('aiTools.console.mcpState', [mcp.opCount]) }}</div>
             </el-form-item>
 
+            <!-- 网络代理。
+                 存在的原因是实测：香港的服务器 TCP/TLS 都正常，但
+                 api.anthropic.com 和 api.openai.com 按出口地区回 403。
+                 让控制台的出站走本机 VPN 客户端开的本地端口即可。 -->
+            <el-form-item :label="$t('aiTools.console.proxyTitle')">
+                <el-switch v-model="proxy.enabled" />
+                <div class="vp-set__note">{{ $t('aiTools.console.proxyHint') }}</div>
+                <template v-if="proxy.enabled">
+                    <el-input
+                        v-model="proxy.url"
+                        class="vp-set__proxy"
+                        spellcheck="false"
+                        placeholder="http://127.0.0.1:7890"
+                    />
+                    <div class="vp-set__note">{{ $t('aiTools.console.proxyExample') }}</div>
+                </template>
+
+                <!-- 测试按钮：配完之后必须能当场验证。
+                     不给验证手段的话，配错了的表现是「登录卡住」，
+                     和不配代理时一模一样，用户无从判断。 -->
+                <div class="vp-set__proxyacts">
+                    <el-button size="small" :loading="checking" @click="doCheck">
+                        {{ $t('aiTools.console.proxyTest') }}
+                    </el-button>
+                </div>
+                <div v-for="r in reach" :key="r.url" class="vp-set__reach">
+                    <span :class="r.ok ? 'vp-set__ok' : 'vp-set__bad'">{{ r.ok ? '✓' : '✗' }}</span>
+                    <span>{{ r.purpose }}</span>
+                    <span class="vp-set__note">{{ r.ok ? $t('aiTools.console.proxyReachOk') : r.detail }}</span>
+                </div>
+            </el-form-item>
+
             <el-form-item :label="$t('aiTools.console.harnesses')">
                 <!-- 登录那一块由 harness 的能力表决定显不显示，不再按 id 判断。
                      写死 id === 'claude-code' 的那一版，加一个 harness 就得改这里。 -->
@@ -81,6 +113,9 @@ import {
     agentLogout,
     getMcpSetting,
     updateMcpSetting,
+    getOutbound,
+    updateProxy,
+    checkReachability,
 } from '@/api/modules/vipanel';
 import { ViPanel } from '@/api/interface/vipanel';
 import { MsgError, MsgSuccess } from '@/utils/message';
@@ -97,6 +132,26 @@ const harnesses = ref<ViPanel.Harness[]>([]);
 const auth = ref<Record<string, ViPanel.AuthState>>({});
 const mcp = ref({ enabled: true, installed: false, opCount: 0 });
 const installRef = ref();
+const proxy = ref<ViPanel.Outbound>({ enabled: false, url: '' });
+const reach = ref<ViPanel.ReachResult[]>([]);
+const checking = ref(false);
+
+// 测试前**先把当前填的代理存下来**，否则测的是上一次保存的值，
+// 用户会以为改了地址没生效。
+const doCheck = async () => {
+    checking.value = true;
+    reach.value = [];
+    try {
+        await updateProxy(proxy.value.enabled, proxy.value.url);
+        const targets = harnesses.value.filter((h) => h.installed && h.capabilities.auth);
+        const all = await Promise.all(targets.map((h) => checkReachability(h.id).then((r) => r.data || [])));
+        reach.value = all.flat();
+    } catch (e: any) {
+        MsgError(e?.message || String(e));
+    } finally {
+        checking.value = false;
+    }
+};
 
 // 装完之后必须重新拉一次列表：installed / 登录状态都变了，
 // 界面继续显示「未安装」就是在撒谎。
@@ -109,11 +164,13 @@ const onInstalled = async (installed: boolean) => {
 };
 
 const load = async () => {
-    const [p, hs, m] = await Promise.all([getPool(), listHarnesses(), getMcpSetting()]);
+    const [p, hs, m, ob] = await Promise.all([getPool(), listHarnesses(), getMcpSetting(), getOutbound()]);
     pool.value = p.data;
     size.value = p.data.size;
     harnesses.value = hs.data || [];
     mcp.value = { ...mcp.value, ...m.data };
+    proxy.value = ob.data;
+    reach.value = [];
 
     // 只问装了、且自己有登录体系的那些。挨个问一个没装的 harness
     // 就是挨个等一次 exec 失败。
@@ -136,6 +193,7 @@ const save = async () => {
     try {
         pool.value = (await updatePool(size.value)).data;
         await updateMcpSetting(mcp.value.enabled);
+        await updateProxy(proxy.value.enabled, proxy.value.url);
         MsgSuccess(t('aiTools.console.saved'));
         visible.value = false;
         emit('changed');
@@ -154,6 +212,20 @@ defineExpose({ show: () => (visible.value = true) });
 </script>
 
 <style lang="scss" scoped>
+.vp-set__proxy {
+    margin-top: 6px;
+}
+.vp-set__proxyacts {
+    margin-top: 8px;
+}
+.vp-set__reach {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    margin-top: 4px;
+    font-size: 11px;
+    line-height: 1.6;
+}
 .vp-set__note {
     font-size: 11px;
     line-height: 1.6;

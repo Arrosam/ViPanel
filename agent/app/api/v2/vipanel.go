@@ -417,23 +417,7 @@ func (b *BaseApi) UpdateViProxy(c *gin.Context) {
 	if err := helper.CheckBindAndValidate(&req, c); err != nil {
 		return
 	}
-	if err := vipanel.SetProxy(vipanel.Proxy{URL: req.URL}); err != nil {
-		helper.BadRequest(c, err)
-		return
-	}
-	helper.SuccessWithData(c, vipanel.OutboundSetting())
-}
-
-// @Tags ViPanel
-// @Summary 保存某个 harness 的中转端点
-// @Router /ai/console/outbound/provider [post]
-func (b *BaseApi) UpdateViProvider(c *gin.Context) {
-	var req dto.ViProviderReq
-	if err := helper.CheckBindAndValidate(&req, c); err != nil {
-		return
-	}
-	p := vipanel.Provider{BaseURL: req.BaseURL, APIKey: req.APIKey}
-	if err := vipanel.SetProvider(req.Harness, p); err != nil {
+	if err := vipanel.SetProxy(vipanel.Proxy{Enabled: req.Enabled, URL: req.URL}); err != nil {
 		helper.BadRequest(c, err)
 		return
 	}

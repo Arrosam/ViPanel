@@ -21,6 +21,16 @@ func Init() {
 	global.CONF.Base.Edition, _ = settingRepo.GetValueByKey("Edition")
 	global.CONF.Conn.BindAddress, _ = settingRepo.GetValueByKey("BindAddress")
 	global.CONF.Conn.SSL, _ = settingRepo.GetValueByKey("SSL")
+	// **版本以二进制里编进去的为准**，数据库里那份只是它的副本。
+	//
+	// 装机时 install.sh 写的是一个固定值，升级换了二进制之后它不会自己变；
+	// 而界面页脚和更新检查都读数据库这一份。不同步的话，换了新二进制的面板
+	// 仍然自称旧版本，更新检查也就永远得出错误结论。
+	if global.Version != "" && global.Version != "dev" {
+		if cur, _ := settingRepo.GetValueByKey("SystemVersion"); cur != global.Version {
+			_ = settingRepo.Update("SystemVersion", global.Version)
+		}
+	}
 	global.CONF.Base.Version, _ = settingRepo.GetValueByKey("SystemVersion")
 	if err := settingRepo.Update("SystemStatus", "Free"); err != nil {
 		global.LOG.Fatalf("init service before start failed, err: %v", err)

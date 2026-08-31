@@ -76,7 +76,9 @@ jobs:
             # -s -w 去掉符号表和调试信息。实测只省 5%（core 292MB → 277MB）——
             # 大头是 embed 进去的前端和一大堆 Go 依赖，不是调试信息。
             # 加它没坏处，但别指望它解决体积问题。用户实际下载的 tar.gz 约 102MB。
-            LD="-s -w"
+            # 把版本编进二进制。不注入的话面板只能自称 dev，
+            # 更新检查也就无从比较——版本号错正是这么来的。
+            LD="-s -w -X github.com/1Panel-dev/1Panel/core/global.Version=$VERSION"
             ( cd core  && CGO_ENABLED=0 GOOS=linux GOARCH=$ARCH \
                 go build -trimpath -ldflags "$LD" -o "../$OUT/build/1panel-core"  ./cmd/server )
             ( cd agent && CGO_ENABLED=0 GOOS=linux GOARCH=$ARCH \

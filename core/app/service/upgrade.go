@@ -104,7 +104,8 @@ func (u *UpgradeService) SearchUpgrade() (*dto.UpgradeInfo, error) {
 		return &upgrade, nil
 	}
 	// 开发构建不参与版本比较：dev 和任何发布版比都是「有新版」，那是噪音。
-	if global.Version == "dev" {
+	// 用前缀判断——开发构建通常带上 commit，形如 dev-a1b2c3d。
+	if strings.HasPrefix(global.Version, "dev") {
 		return &upgrade, nil
 	}
 	upgrade.LatestVersion = latest

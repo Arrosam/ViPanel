@@ -13,6 +13,10 @@ import "os"
 //
 // 默认 "dev"：**没有注入版本就说自己是 dev**，不要冒充一个像模像样的版本号。
 // 自称 v2.0.0 的开发构建会让更新检查得出毫无意义的结论。
+//
+// 注意别用 `git describe` 去生成它：这个仓库是 1Panel 的分支，还没有自己的
+// tag 时它会落回上游的 v2.2.4，等于又把 ViPanel 说成一个 1Panel 版本。
+// 没发版之前一律 dev-<sha>，判断时按 "dev" 前缀识别。
 var Version = "dev"
 
 // Repo 是发布仓库，和 scripts/get.sh 里的 REPO 必须是同一个值。

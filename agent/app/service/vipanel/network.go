@@ -123,18 +123,43 @@ func CheckReachability(harnessID string, p Proxy) []ReachResult {
 	if !ok {
 		return nil
 	}
-	client := &http.Client{Timeout: 12 * time.Second}
-	if u := strings.TrimSpace(p.URL); u != "" {
-		if parsed, err := url.Parse(u); err == nil {
-			client.Transport = &http.Transport{Proxy: http.ProxyURL(parsed)}
-		}
-	}
+	client := newProbeClient(p)
 
 	var out []ReachResult
 	for _, e := range deps.Endpoints() {
 		out = append(out, probe(client, e))
 	}
 	return out
+}
+
+// newProbeClient 造一个探测用的 http 客户端。
+// 抽成函数是为了让测试用**同一套行为**，而不是自己造一个近似的。
+func newProbeClient(p Proxy) *http.Client {
+	client := &http.Client{
+		Timeout: 12 * time.Second,
+		// **不跟随重定向。**
+		//
+		// 3xx 本身已经证明请求到达了服务端，跟过去反而会落到别的页面上：
+		// auth.openai.com/codex/device 会 302 到一个挂着 Cloudflare 人机校验
+		// 的地址，那个地址对任何来源都回 403——于是一台完全正常的机器
+		// 被报成「被地区拒绝」。curl 不跟随所以看到的是 302，Go 默认跟随，
+		// 两边结论不同正是这么来的。
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	if u := strings.TrimSpace(p.URL); u != "" {
+		if parsed, err := url.Parse(u); err == nil {
+			client.Transport = &http.Transport{Proxy: http.ProxyURL(parsed)}
+		}
+	}
+
+	if p.Active() {
+		if parsed, err := url.Parse(strings.TrimSpace(p.URL)); err == nil {
+			client.Transport = &http.Transport{Proxy: http.ProxyURL(parsed)}
+		}
+	}
+	return client
 }
 
 func probe(client *http.Client, e Endpoint) ReachResult {
@@ -155,10 +180,13 @@ func probe(client *http.Client, e Endpoint) ReachResult {
 	defer resp.Body.Close()
 	r.Status = resp.StatusCode
 
-	// 401/404 都算通：我们没带凭据，能收到这类应答说明请求到达了服务端。
+	// 401/404/3xx 都算通：我们没带凭据也不跟跳转，能收到这类应答
+	// 就说明请求到达了服务端。
 	// **要区分出来的是 403**——地区封锁就长这样，而它和「网络不通」
 	// 的解决办法完全不同。
 	switch {
+	case resp.StatusCode >= 300 && resp.StatusCode < 400:
+		r.OK = true // 重定向说明服务端收到了请求
 	case resp.StatusCode == http.StatusForbidden:
 		r.Detail = "返回 403，通常是按出口地区拒绝。请在设置里开启网络代理，指向一个能到目标地区的出口。"
 	case resp.StatusCode >= 500:

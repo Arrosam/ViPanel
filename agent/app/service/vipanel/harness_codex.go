@@ -206,7 +206,13 @@ func (codexCLI) TimeoutDecision() Decision { return DecideDeny }
 // 分开探是因为只探一个会给出误导性的结论。
 func (codexCLI) Endpoints() []Endpoint {
 	return []Endpoint{
-		{URL: "https://auth.openai.com/", Purpose: "登录（设备码授权）"},
+		// 探 /codex/device 而不是站点根路径。
+		//
+		// 根路径挂着 Cloudflare 的人机校验，任何来源都回 403——**包括没有
+		// 任何地区限制的机器**（实测：新西兰家庭宽带直连也是 403 "Just a moment"）。
+		// 拿它当可达性判据，会把一台完全正常的机器报成「被地区拒绝」，
+		// 然后用户去折腾一个根本不存在的问题。
+		{URL: "https://auth.openai.com/codex/device", Purpose: "登录（设备码授权）"},
 		{URL: "https://api.openai.com/v1/models", Purpose: "OpenAI API"},
 	}
 }

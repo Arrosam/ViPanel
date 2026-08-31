@@ -1,6 +1,8 @@
 package vipanel
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
@@ -73,5 +75,29 @@ func TestProxyDisabledInjectsNothing(t *testing.T) {
 	// 开了但没填地址，同样不生效
 	if (Proxy{Enabled: true}).Active() {
 		t.Error("开了但没地址不该是 active")
+	}
+}
+
+// 探测不能跟随重定向：3xx 已经证明请求到达了服务端，跟过去可能落到
+// 一个挂着人机校验的页面上，把正常机器误报成被封锁。
+func TestProbeDoesNotFollowRedirects(t *testing.T) {
+	hit := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hit++
+		if r.URL.Path == "/dev" {
+			http.Redirect(w, r, "/blocked", http.StatusFound)
+			return
+		}
+		w.WriteHeader(http.StatusForbidden) // 模拟人机校验页
+	}))
+	defer srv.Close()
+
+	client := newProbeClient(Proxy{})
+	got := probe(client, Endpoint{URL: srv.URL + "/dev", Purpose: "登录"})
+	if !got.OK {
+		t.Errorf("302 应当算可达，实际: status=%d detail=%s", got.Status, got.Detail)
+	}
+	if hit != 1 {
+		t.Errorf("不该跟随重定向，实际请求了 %d 次", hit)
 	}
 }

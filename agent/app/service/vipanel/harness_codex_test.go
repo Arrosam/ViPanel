@@ -143,3 +143,15 @@ func TestCodexHonorsCodexHome(t *testing.T) {
 		t.Errorf("CODEX_HOME 没被认，artifact 路径是 %v", arts)
 	}
 }
+
+// 可达性探测不能用会触发人机校验的地址。
+//
+// auth.openai.com 根路径挂着 Cloudflare 的 "Just a moment"，任何来源都回 403，
+// 包括完全没有地区限制的机器。用它当判据会把正常机器误报成被封锁。
+func TestCodexEndpointsAvoidChallengePages(t *testing.T) {
+	for _, e := range Get("codex").(NetworkDeps).Endpoints() {
+		if e.URL == "https://auth.openai.com/" || e.URL == "https://auth.openai.com" {
+			t.Errorf("不能拿 auth.openai.com 根路径做可达性判据（它对所有来源都回 403）")
+		}
+	}
+}

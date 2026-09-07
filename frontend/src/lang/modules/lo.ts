@@ -750,7 +750,7 @@ const message = {
             agents: 'ຕົວແທນ',
             proxyTitle: 'ພຣັອກຊີເຄືອຂ່າຍ',
             proxyHint: 'ໃຫ້ traffic ຂາອອກຂອງຄອນໂຊລຜ່ານພຣັອກຊີ. ໃຊ້ເມື່ອເຄື່ອງແມ່ຂ່າຍນີ້ເຊື່ອມຕໍ່ຫາ Anthropic ຫຼື OpenAI ໂດຍກົງບໍ່ໄດ້ (ເຊັ່ນ ຖືກປິດຕາມພາກພື້ນ).',
-            proxyExample: 'ປົກກະຕິແມ່ນພອດທ້ອງຖິ່ນທີ່ VPN client ເປີດໄວ້ ເຊັ່ນ http://127.0.0.1:7890 ຫຼື socks5://127.0.0.1:1080',
+            proxyExample: 'ພອດ HTTP ທ້ອງຖິ່ນທີ່ໂປຣແກຣມພຣັອກຊີ/VPN ເປີດໄວ້ ເຊັ່ນ http://127.0.0.1:7890. ບໍ່ຮອງຮັບ SOCKS —— ທັງ Claude Code ແລະ Codex ໃຊ້ບໍ່ໄດ້.',
             proxyTest: 'ທົດສອບການເຊື່ອມຕໍ່',
             proxyReachOk: 'ເຂົ້າເຖິງໄດ້',
             notInstalled: 'ຍັງບໍ່ໄດ້ຕິດຕັ້ງ',

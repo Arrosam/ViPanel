@@ -757,7 +757,7 @@ const message = {
             agents: 'Agents',
             proxyTitle: 'Network proxy',
             proxyHint: 'Route the console\'s outbound traffic through a proxy. Use this when this server cannot reach Anthropic or OpenAI directly (e.g. blocked by region).',
-            proxyExample: 'Usually the local port your VPN client exposes, e.g. http://127.0.0.1:7890 or socks5://127.0.0.1:1080',
+            proxyExample: 'The local HTTP port your proxy/VPN client exposes, e.g. http://127.0.0.1:7890. SOCKS is not supported — neither Claude Code nor Codex can speak it.',
             proxyTest: 'Test connectivity',
             proxyReachOk: 'reachable',
             notInstalled: 'Not installed',

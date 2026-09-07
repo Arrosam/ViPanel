@@ -27,13 +27,16 @@ func TestProxyEnvCoversBothCases(t *testing.T) {
 }
 
 func TestProxyValidate(t *testing.T) {
-	ok := []string{"", "http://127.0.0.1:7890", "https://p.example.com:8443", "socks5://10.0.0.1:1080", "socks5h://a:b@h:1"}
+	ok := []string{"", "http://127.0.0.1:7890", "https://p.example.com:8443"}
 	for _, u := range ok {
 		if err := (Proxy{URL: u}).Validate(); err != nil {
 			t.Errorf("%q 应当合法：%v", u, err)
 		}
 	}
-	bad := []string{"127.0.0.1:7890", "ftp://h:1", "http://", "不是地址"}
+	// socks 要被明确拒绝：面板自己的探测走 Go 能通，而两个 CLI 都不认，
+	// 放行的话会出现「可达性全绿但登录失败」这种最难查的错位。
+	bad := []string{"127.0.0.1:7890", "ftp://h:1", "http://", "不是地址",
+		"socks5://10.0.0.1:1080", "socks5h://a:b@h:1"}
 	for _, u := range bad {
 		if err := (Proxy{URL: u}).Validate(); err == nil {
 			t.Errorf("%q 应当被拒绝", u)

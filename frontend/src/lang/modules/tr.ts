@@ -754,7 +754,7 @@ const message = {
             agents: 'Aracılar',
             proxyTitle: 'Ağ proxy\'si',
             proxyHint: 'Konsolun giden trafiğini bir proxy üzerinden yönlendirir. Bu sunucu Anthropic veya OpenAI\'ye doğrudan erişemiyorsa (ör. bölge engeli) kullanın.',
-            proxyExample: 'Genellikle VPN istemcinizin açtığı yerel port, ör. http://127.0.0.1:7890 veya socks5://127.0.0.1:1080',
+            proxyExample: 'Proxy/VPN istemcinizin açtığı yerel HTTP portu, ör. http://127.0.0.1:7890. SOCKS desteklenmiyor — ne Claude Code ne de Codex bunu konuşabiliyor.',
             proxyTest: 'Bağlantıyı test et',
             proxyReachOk: 'erişilebilir',
             notInstalled: 'Kurulu değil',

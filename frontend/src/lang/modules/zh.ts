@@ -723,7 +723,7 @@ const message = {
             agents: 'Agent',
             proxyTitle: '网络代理',
             proxyHint: '让控制台的出站流量走代理。这台服务器直连不上 Anthropic 或 OpenAI（比如被按地区拒绝）时用它。',
-            proxyExample: '通常是本机 VPN 客户端开的本地端口，例如 http://127.0.0.1:7890 或 socks5://127.0.0.1:1080',
+            proxyExample: '代理/VPN 客户端开的本地 HTTP 端口，例如 http://127.0.0.1:7890。不支持 SOCKS —— Claude Code 和 Codex 都不认它。',
             proxyTest: '测试连通性',
             proxyReachOk: '可达',
             notInstalled: '未安装',

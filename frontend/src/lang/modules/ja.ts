@@ -751,7 +751,7 @@ const message = {
             agents: 'エージェント',
             proxyTitle: 'ネットワークプロキシ',
             proxyHint: 'コンソールの外向き通信をプロキシ経由にします。このサーバーから Anthropic や OpenAI に直接つながらない場合（地域による拒否など）に使います。',
-            proxyExample: '通常は VPN クライアントがローカルに開くポート。例: http://127.0.0.1:7890 または socks5://127.0.0.1:1080',
+            proxyExample: 'プロキシ/VPN クライアントがローカルに開く HTTP ポート。例: http://127.0.0.1:7890。SOCKS は非対応です（Claude Code も Codex も話せません）。',
             proxyTest: '接続テスト',
             proxyReachOk: '到達可能',
             notInstalled: '未インストール',

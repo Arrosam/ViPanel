@@ -752,7 +752,7 @@ const message = {
             agents: 'Agentes',
             proxyTitle: 'Proxy de rede',
             proxyHint: 'Encaminha o tráfego de saída do console por um proxy. Use quando este servidor não conseguir acessar a Anthropic ou a OpenAI diretamente (por exemplo, bloqueio por região).',
-            proxyExample: 'Geralmente a porta local exposta pelo seu cliente VPN, ex.: http://127.0.0.1:7890 ou socks5://127.0.0.1:1080',
+            proxyExample: 'A porta HTTP local exposta pelo seu cliente de proxy/VPN, ex.: http://127.0.0.1:7890. SOCKS não é suportado — nem Claude Code nem Codex funcionam com ele.',
             proxyTest: 'Testar conectividade',
             proxyReachOk: 'acessível',
             notInstalled: 'Não instalado',

@@ -720,7 +720,7 @@ const message = {
             agents: 'Agent',
             proxyTitle: '網路代理',
             proxyHint: '讓主控台的對外流量走代理。這台伺服器無法直連 Anthropic 或 OpenAI（例如被依地區拒絕）時使用。',
-            proxyExample: '通常是本機 VPN 用戶端開的本地連接埠，例如 http://127.0.0.1:7890 或 socks5://127.0.0.1:1080',
+            proxyExample: '代理/VPN 用戶端開的本地 HTTP 連接埠，例如 http://127.0.0.1:7890。不支援 SOCKS —— Claude Code 與 Codex 都不認它。',
             proxyTest: '測試連通性',
             proxyReachOk: '可達',
             notInstalled: '未安裝',

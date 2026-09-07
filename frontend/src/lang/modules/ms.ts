@@ -758,7 +758,7 @@ const message = {
             agents: 'Ejen',
             proxyTitle: 'Proksi rangkaian',
             proxyHint: 'Halakan trafik keluar konsol melalui proksi. Gunakan apabila pelayan ini tidak dapat menghubungi Anthropic atau OpenAI secara terus (cth. disekat mengikut wilayah).',
-            proxyExample: 'Biasanya port tempatan yang dibuka klien VPN anda, cth. http://127.0.0.1:7890 atau socks5://127.0.0.1:1080',
+            proxyExample: 'Port HTTP tempatan yang dibuka klien proksi/VPN anda, cth. http://127.0.0.1:7890. SOCKS tidak disokong — Claude Code mahupun Codex tidak boleh menggunakannya.',
             proxyTest: 'Uji kesambungan',
             proxyReachOk: 'boleh dicapai',
             notInstalled: 'Belum dipasang',

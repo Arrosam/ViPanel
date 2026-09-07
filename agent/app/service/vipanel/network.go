@@ -78,9 +78,18 @@ func (p Proxy) Validate() error {
 		return fmt.Errorf("代理地址解析失败: %v", err)
 	}
 	switch parsed.Scheme {
-	case "http", "https", "socks5", "socks5h":
+	case "http", "https":
+	case "socks5", "socks5h":
+		// **两个 CLI 都不会说 SOCKS5**，这是真机上撞出来的：
+		//   codex  带 socks5 时设备码登录报 "error sending request"——
+		//          比不配代理还糟，不配至少能拿到一个看得懂的 403。
+		//   claude 是 Node，undici 默认不支持 socks。
+		// 面板自己的探测用 Go 客户端，socks5 是能走通的，于是会出现
+		// 「可达性全绿但登录仍然失败」这种最难查的错位。所以直接拒绝。
+		return fmt.Errorf("暂不支持 SOCKS 代理：Claude Code 与 Codex 都只认 HTTP 代理。" +
+			"如果你的代理软件同时提供 HTTP 端口，请改填 http://…")
 	default:
-		return fmt.Errorf("不支持的代理协议 %q，只支持 http / https / socks5 / socks5h", parsed.Scheme)
+		return fmt.Errorf("不支持的代理协议 %q，只支持 http / https", parsed.Scheme)
 	}
 	if parsed.Host == "" {
 		return fmt.Errorf("代理地址缺少主机名")
